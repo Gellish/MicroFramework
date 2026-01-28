@@ -1,189 +1,175 @@
-# SPAFrame + IncludeParser
+# SPA Micro-Framework (Vite + Bootstrap 5)
 
-A lightweight JavaScript framework that brings **Laravel-style HTML includes** and **SPA navigation** to plain HTML files — **without build tools, without attributes, and without flash or blank screens**.
+A **lightweight Single Page Application micro-framework** built on **Vite**, **Bootstrap 5**, and a custom runtime that enables **Laravel-style HTML includes** and **smooth SPA navigation** — without visual glitches.
 
 ---
 
 ## ✨ Features
 
-* ✅ `@include('file.html')` syntax (Laravel-style)
-* ✅ No repeated navbar / footer / layout HTML
-* ✅ SPA navigation (no full page reload)
-* ✅ No flash of raw HTML
-* ✅ No blank screen during navigation
-* ✅ Works with plain `.html` files
-* ✅ Zero build step
-* ✅ Pure client-side JavaScript
+* ⚡ **Powered by Vite**
+  Instant dev server, fast HMR, and optimized production builds.
+
+* 🎨 **Bootstrap 5**
+  Responsive layout, navbar, grid system, and UI components.
+
+* 🧩 **Laravel-Style HTML Includes**
+  Reuse components with:
+
+  ```html
+  @include('/includes/nav.html')
+  ```
+
+  * Processed **before render**
+  * **Zero FOUC** (no flash, no blank screen, no split-second artifacts)
+
+* 🚀 **SPA Navigation**
+  Client-side routing without full page reloads.
+
+* 📱 **Fully Responsive**
+  Mobile-first layouts and navigation.
 
 ---
 
-## 🎯 Purpose
+## 🗂 Project Structure
 
-This framework solves a common static-site problem:
-
-> Repeating the same HTML (navbar, footer, layout) across multiple pages.
-
-Instead of copy-pasting shared markup into every page, you write it **once** and reuse it everywhere.
-
-```html
-@include('nav.html')
 ```
-
-The browser automatically injects the HTML at runtime.
-
----
-
-## 🧠 How It Works (Conceptual)
-
-1. Browser loads the page
-2. Rendering is **temporarily stabilized** (paint is delayed)
-3. `IncludeParser` resolves all `@include()` directives
-4. Shared HTML is injected into the DOM
-5. SPAFrame enables client-side navigation
-6. Page is displayed only when fully ready
-
-This prevents:
-
-* Flash of unprocessed HTML
-* Blank screens during navigation
-* Layout jumping
+project/
+├── assets/
+│   ├── css/            # Custom styles
+│   ├── js/             # Core framework scripts (IncludeParser, SPAFrame)
+│   └── images/         # Images and illustrations
+├── includes/           # Reusable HTML components (nav, footer)
+├── pages/              # Application pages (blog, about, contact)
+├── index.html          # Entry point (Home)
+├── vite.config.js      # Vite config (HTML transform & routing)
+└── package.json        # Dependencies & scripts
+```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1️⃣ Project Structure
+### 1️⃣ Install Dependencies
+
+```bash
+npm install
+```
+
+### 2️⃣ Start Development Server
+
+```bash
+npm run dev
+```
+
+Open:
 
 ```
-project/
-│
-├─ index.html
-├─ blog.html
-├─ nav.html
-├─ main.css
-├─ spa-frame.js
-├─ parser.js
+http://localhost:5173
+```
+
+### 3️⃣ Build for Production
+
+```bash
+npm run build
 ```
 
 ---
 
-### 2️⃣ Example Page
+## 🧠 How It Works
+
+### HTML Includes (Laravel-Style)
+
+Instead of repeating layout code across pages, shared components are included using:
 
 ```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Home</title>
-  <link rel="stylesheet" href="main.css">
-  <script src="spa-frame.js"></script>
-  <script src="parser.js"></script>
-</head>
-<body>
-
-  @include('nav.html')
-
-  <h1>Home Page</h1>
-
-</body>
-</html>
+@include('/includes/nav.html')
 ```
 
----
+**Vite processes these includes at dev/build time**, so:
 
-### 3️⃣ Example `nav.html`
-
-```html
-<nav>
-  <a href="index.html">Home</a>
-  <a href="blog.html">Blog</a>
-</nav>
-```
+* The browser receives **fully rendered HTML**
+* No runtime flashes
+* SEO-friendly output
+* No JavaScript race conditions
 
 ---
 
-## 🔥 Running the Project (Required)
+### SPA Navigation
 
-### ❌ Do NOT open with:
+The `SPAFrame` runtime handles internal navigation:
 
-```
-file:///index.html
-```
+1. Intercepts internal link clicks
+2. Fetches page content via `fetch()`
+3. Replaces the main content area
+4. Updates browser history (`pushState`)
+5. Preserves layout and styles
 
-Modern browsers block `fetch()` for local files.
-
----
-
-### ✅ FASTEST OPTION (Recommended)
-
-1. Install dependencies (first time only):
-   ```bash
-   npm install
-   ```
-
-2. Start the server:
-   ```bash
-   npm run dev
-   ```
-
-3. Open the link shown in the terminal (usually `http://localhost:5173`).
+All without a full page reload.
 
 ---
 
-## 🧩 Why a Server Is Needed
+## 📄 Pages
 
-* Enables `fetch()` for HTML includes
-* Avoids CORS restrictions
-* Serves static files only
-* No backend logic involved
-
-This framework remains **100% client-side**.
-
----
-
-## ⚡ Why There Is No Flash or Blank Screen
-
-This framework **stabilizes rendering before DOM mutation**, similar to how modern frameworks work internally.
-
-Instead of letting the browser paint immediately:
-
-* Rendering is delayed
-* Includes are resolved
-* DOM is finalized
-* Page is shown only when complete
-
-This is the same principle used by:
-
-* React
-* Svelte
-* Next.js
-* Server-side templating engines
+| Page        | URL        | Description                       |
+| ----------- | ---------- | --------------------------------- |
+| **Home**    | `/`        | Landing page with hero section    |
+| **Blog**    | `/blog`    | Blog grid using Bootstrap cards   |
+| **About**   | `/about`   | Profile section with illustration |
+| **Contact** | `/contact` | Styled contact form               |
 
 ---
 
-## 🆚 Comparison
+## 🛠 Recent Improvements & Fixes
 
-| Feature           | This Framework | React / Vue | HTMX      |
-| ----------------- | -------------- | ----------- | --------- |
-| Build step        | ❌ No           | ✅ Yes       | ❌ No      |
-| Plain HTML        | ✅ Yes          | ❌ No        | ✅ Yes     |
-| SPA navigation    | ✅ Yes          | ✅ Yes       | ⚠ Partial |
-| HTML includes     | ✅ Yes          | ❌ No        | ⚠ Partial |
-| Flash-free render | ✅ Yes          | ✅ Yes       | ⚠ Partial |
+### ✅ Zero Flash / Zero Blank Screen
+
+* Implemented **Vite `transformIndexHtml`**
+* Includes are resolved **before the browser renders**
+* No `visibility: hidden` hacks required at runtime
+
+### ✅ Clean URLs
+
+* Routes work without `.html`
+
+  ```
+  /about
+  /contact
+  /blog
+  ```
+* Middleware handles SPA fallback correctly
+
+### ✅ Layout Stability
+
+* Navbar is full-width (fluid)
+* Page content remains centered
+* No layout shifting during navigation
+
+### ✅ Bootstrap 5 Standardization
+
+* Unified layout system
+* Removed redundant custom CSS
+* Consistent UI across all pages
 
 ---
 
-## 🧪 Ideal Use Cases
+## 🎯 Why This Framework Exists
 
-* Static websites
-* Documentation sites
-* Dashboards
-* Prototypes
-* Learning SPA internals
-* Developers who want full control
+This project sits between:
+
+* Static HTML
+* Full SPA frameworks (React / Vue)
+
+It’s ideal if you want:
+
+* Plain HTML
+* Reusable components
+* SPA behavior
+* No build complexity creep
+* Full control over rendering
 
 ---
 
-## 📌 One-Line Description
+## 📜 License
 
-> A lightweight JavaScript framework that adds Laravel-style HTML includes and SPA navigation to plain HTML — without build tools and without visual artifacts.
+Open Source.
+Use it, fork it, break it, improve it.
