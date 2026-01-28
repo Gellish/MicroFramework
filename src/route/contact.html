@@ -1,0 +1,39 @@
+<title>Contact Me</title>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0 rounded-3">
+                <div class="card-body p-5">
+                    <h1 class="text-center mb-4">Get in Touch</h1>
+                    <p class="text-center text-muted mb-5">Have a question or want to work together? Fill out the
+                        form below.</p>
+
+                    <form onsubmit="event.preventDefault(); alert('Message sent (demo only)!');">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Full Name</label>
+                            <input type="text" class="form-control form-control-lg" id="name" placeholder="John Doe"
+                                required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email Address</label>
+                            <input type="email" class="form-control form-control-lg" id="email"
+                                placeholder="name@example.com" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="message" class="form-label">Message</label>
+                            <textarea class="form-control form-control-lg" id="message" rows="5"
+                                placeholder="Your message..." required></textarea>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">Send Message</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
