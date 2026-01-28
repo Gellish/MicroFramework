@@ -1,5 +1,6 @@
   body {
-      visibility: hidden; /* Prevent FOUC, revealed by parser.js */
+      visibility: hidden;
+      /* Prevent FOUC, revealed by parser.js */
       font-family: Arial, sans-serif;
       line-height: 1.6;
       margin: 0;
@@ -22,8 +23,20 @@
       border-radius: 4px;
   }
 
-  nav a:hover {
-      background-color: #555;
+  /* Custom Hover State */
+  .navbar-dark .navbar-nav .nav-link:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      /* Subtle hover effect */
+      color: #fff;
+      border-radius: 5px;
+  }
+
+  /* Custom Active State for Bootstrap Navbar */
+  .navbar-dark .navbar-nav .nav-link.active {
+      background-color: rgba(255, 255, 255, 0.2);
+      /* Semi-transparent gray/white box */
+      color: #fff;
+      border-radius: 5px;
   }
 
   .container {

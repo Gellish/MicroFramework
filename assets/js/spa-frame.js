@@ -50,6 +50,9 @@
       // Hide body before replacing content to prevent flash
       document.body.style.visibility = 'hidden';
 
+      // Push the new URL into browser history (BEFORE scripts run so they see the new URL)
+      if (push) history.pushState(null, "", url);
+
       // Replace current body with the new page's body
       document.body.innerHTML = doc.body.innerHTML;
 
@@ -68,9 +71,6 @@
 
       // Show body after everything is processed
       document.body.style.visibility = 'visible';
-
-      // Push the new URL into browser history if requested
-      if (push) history.pushState(null, "", url);
     } catch (err) {
       // On error, fallback to normal navigation
       console.error("SPAFrame navigation error:", err);

@@ -27,3 +27,24 @@
     </div>
   </div>
 </nav>
+
+<script>
+  (function () {
+    // Get current path, ignoring trailing slash for root
+    const path = window.location.pathname === '/' ? '/' : window.location.pathname.replace(/\/$/, '');
+
+    // Find link matching current path
+    const links = document.querySelectorAll('.navbar-nav .nav-link');
+    links.forEach(link => {
+      const href = link.getAttribute('href');
+      // Simple match: perfect match or (for /blog) starts with
+      if (href === path || (href !== '/' && path.startsWith(href))) {
+        link.classList.add('active');
+        link.style.fontWeight = 'bold'; // Make it pop
+      } else {
+        link.classList.remove('active');
+        link.style.fontWeight = 'normal';
+      }
+    });
+  })();
+</script>
