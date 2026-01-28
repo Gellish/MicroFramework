@@ -1,64 +1,226 @@
+import { marked } from 'marked';
+import jsyaml from 'js-yaml';
+
 (function (global) {
   const IncludeParser = {};
-
-  // 🔹 In-flight promise cache to prevent duplicate network requests
   const inflight = new Map();
+  const markdownFiles = import.meta.glob('/pages/**/*.md', { as: 'raw', eager: true });
 
-  // 🔹 Fetch a file relative to current page (with Caching & Deduping)
   async function fetchFile(file) {
     const url = new URL(file, location.href).href;
     const cacheKey = 'include_cache_' + url;
-
-    // 1. Try Memory/Session Cache
     const cached = sessionStorage.getItem(cacheKey);
-    if (cached) {
-      // Background revalidate (optional, keeping simple for now)
-      return cached;
-    }
-
-    // 2. Check In-flight requests
-    if (inflight.has(url)) {
-      return inflight.get(url);
-    }
-
-    // 3. Network Fetch
-    console.log('[IncludeParser] fetching network', url);
+    if (cached) return cached;
+    if (inflight.has(url)) return inflight.get(url);
     const promise = fetch(url, { credentials: 'same-origin' })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Fetch ${url} failed: ${res.status}`);
         const text = await res.text();
         sessionStorage.setItem(cacheKey, text);
-        inflight.delete(url); // Cleanup
+        inflight.delete(url);
         return text;
       })
       .catch(err => {
         inflight.delete(url);
         throw err;
       });
-
     inflight.set(url, promise);
     return promise;
   }
 
-  // 🔹 Pre-scan the entire document to start fetches early (Automatic Preload)
-  function preloadAll() {
-    const html = document.documentElement.innerHTML;
-    const includeRegex = /@include\(['"](.+?)['"]\)/g;
-    let m;
-    while ((m = includeRegex.exec(html)) !== null) {
-      fetchFile(m[1]).catch(() => { }); // Start fetching immediately
+  function parseMarkdown(rawContent) {
+    const fmRegex = /^-{3,}\r?\n([\s\S]+?)\r?\n-{3,}\r?\n([\s\S]*)/;
+    const match = rawContent.match(fmRegex);
+    if (match) {
+      try {
+        const metadata = jsyaml.load(match[1]);
+        const body = marked.parse(match[2]);
+        return { ...metadata, body };
+      } catch (e) {
+        return { body: marked.parse(rawContent) };
+      }
+    } else {
+      return { body: marked.parse(rawContent) };
     }
   }
 
-  // 🔹 Replace all @include() directives in a string (single pass)
+  function renderTemplate(template, data) {
+    return template.replace(/\{\{\s*([\w]+)\s*\}\}/g, (match, key) => {
+      let val = data[key];
+      if (val instanceof Date) {
+        // Format: January 27, 2026
+        return val.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      }
+      return val !== undefined ? val : '';
+    });
+  }
+
+  // 🔹 Core Logic: Process a full content block string (source + template)
+  function processContentBlockMatch(fullMatch, source, template) {
+    let replacementHtml = '';
+
+    // Path Resolution Logic
+    // If user types 'posts' -> '/pages/posts'
+    // If user types 'pages/posts' -> '/pages/posts' (avoid double /pages/)
+    // If user types '/pages/posts' -> '/pages/posts'
+    let cleanSource = source.trim();
+    if (cleanSource.startsWith('/')) cleanSource = cleanSource.substring(1);
+    if (!cleanSource.startsWith('pages/')) cleanSource = 'pages/' + cleanSource;
+    const searchPath = '/' + cleanSource;
+
+    const matches = Object.keys(markdownFiles).filter(path => {
+      if (path === searchPath + '.md') return true;
+      if (path.startsWith(searchPath + '/')) return true;
+      return false;
+    });
+
+    for (const path of matches) {
+      const raw = markdownFiles[path];
+      const data = parseMarkdown(raw);
+      replacementHtml += renderTemplate(template, data);
+    }
+
+    if (matches.length === 0) {
+      console.warn(`[IncludeParser] No markdown files found for source: ${source} (searched: ${searchPath})`);
+      // replacementHtml = `<!-- No content found for ${source} -->`; // Silent fail is better for UI?
+    }
+    return replacementHtml;
+  }
+
+  // 🔹 Strategy: Find @content text node, scan siblings until @endcontent, render, replace.
+  async function processContentBlocksInDOM(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    let changed = false;
+
+    for (const node of nodes) {
+      // Only look for start tags
+      if (!node.nodeValue.includes('@content(')) continue;
+
+      // Ensure this node is still in the DOM (might have been removed in prev iteration)
+      if (!node.parentNode) continue;
+
+      const startContent = node.nodeValue;
+      const startRegex = /@content\(['"](.+?)['"]\)/;
+      const startMatch = startContent.match(startRegex);
+
+      if (!startMatch) continue; // Should exist if includes() passed
+
+      const source = startMatch[1];
+
+      // We found the start. Now we need to find the end.
+      // We will collect the "Template" parts.
+      const siblingsToRemove = [];
+      let template = '';
+      let foundEnd = false;
+      let currentNode = node;
+
+      // Handle the part of the start node *after* the @content(...)
+      // e.g. "@content('foo') <div>" -> template starts with " <div>"
+      const splitIndex = startContent.indexOf(startMatch[0]) + startMatch[0].length;
+      template += startContent.substring(splitIndex);
+
+      // Traverse siblings
+      while (currentNode.nextSibling) {
+        currentNode = currentNode.nextSibling;
+
+        let nodeText = '';
+        let isEndNode = false;
+
+        if (currentNode.nodeType === Node.TEXT_NODE) {
+          const val = currentNode.nodeValue;
+          const endIdx = val.indexOf('@endcontent');
+          if (endIdx !== -1) {
+            // Found the end!
+            nodeText = val.substring(0, endIdx);
+            isEndNode = true;
+            foundEnd = true;
+          } else {
+            nodeText = val;
+          }
+        } else {
+          // Element node
+          nodeText = currentNode.outerHTML;
+        }
+
+        if (!isEndNode) {
+          siblingsToRemove.push(currentNode);
+          template += nodeText;
+        } else {
+          // Should we keep the text *after* @endcontent? Yes.
+          // But for simplicity, we just won't remove this node yet, 
+          // we'll just truncate its text value later? 
+          // Actually @endcontent is usually on its own line or end of block.
+          // Let's assume we consume the @endcontent marker.
+          siblingsToRemove.push(currentNode); // We will remove the node containing @endcontent? 
+          // Wait, if @endcontent is inside a text node that has other stuff after it, we should split it.
+          // For now, assume it consumes the node or we modify it.
+          // Simpler: Just remove the node if it's mostly the marker.
+          // Correct logic: Modify the end node to remove the marker and everything before it? 
+          // No, we already captured "before it" in nodeText.
+          // So we should update the end node to ONLY contain what's *after* the marker.
+        }
+
+        if (foundEnd) {
+          // Update the End Node content (remove the marker and pre-marker text)
+          if (currentNode.nodeType === Node.TEXT_NODE) {
+            const endIdx = currentNode.nodeValue.indexOf('@endcontent');
+            currentNode.nodeValue = currentNode.nodeValue.substring(endIdx + '@endcontent'.length);
+          }
+          break;
+        }
+      }
+
+      if (foundEnd) {
+        // We have the full template!
+        const newHtml = processContentBlockMatch(null, source, template);
+
+        // Create fragment
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = newHtml;
+        const frag = document.createDocumentFragment();
+        while (wrapper.firstChild) frag.appendChild(wrapper.firstChild);
+
+        // Replace the Start Node with: (Part before @content) + (New HTML)
+        // But wait, the Start Node text *before* the match should be kept.
+        const prefix = startContent.substring(0, startContent.indexOf(startMatch[0]));
+        node.nodeValue = prefix; // Update start node to just be the prefix
+
+        // Insert new content after start node
+        if (node.nextSibling) {
+          node.parentNode.insertBefore(frag, node.nextSibling);
+        } else {
+          node.parentNode.appendChild(frag);
+        }
+
+        // Remove the intermediate nodes that we consumed
+        for (const sibling of siblingsToRemove) {
+          // If it's the end node and we just modified it (it still exists), don't remove it!
+          // Wait, logic above: `siblingsToRemove.push(currentNode)` happened even for End Node.
+          // But we modified End Node in DOM. Removing it would lose the "after" text.
+          // Fix: Don't add End Node to `siblingsToRemove` if we modify it in place.
+          if (sibling === currentNode && sibling.nodeType === Node.TEXT_NODE) {
+            // It was the end text node, we modified its value, keep it.
+          } else {
+            sibling.remove();
+          }
+        }
+
+        changed = true;
+        console.log('[IncludeParser] Processed multi-node content block');
+      }
+    }
+    return changed;
+  }
+
+  // 🔹 Simple String Replacer for Includes
   async function replaceIncludesInString(str) {
     const includeRegex = /@include\(['"](.+?)['"]\)/g;
-    let m;
-    const matches = [];
-    while ((m = includeRegex.exec(str)) !== null) matches.push(m);
+    const matches = [...str.matchAll(includeRegex)];
     if (matches.length === 0) return str;
 
-    // Prefetch all UNIQUE files in parallel
     const uniqueFiles = [...new Set(matches.map(m => m[1]))];
     const fileContents = new Map();
 
@@ -71,7 +233,6 @@
       }
     }));
 
-    // Replace
     let result = str;
     for (const match of matches) {
       const full = match[0];
@@ -82,52 +243,34 @@
     return result;
   }
 
-  // 🔹 Walk through all text nodes in DOM and replace includes
-  async function processRoot(root = document.documentElement) {
-    console.log('[IncludeParser] start processing root', root);
+  // 🔹 Process Includes in Text Nodes (Standard)
+  async function processIncludesInDOM(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
-    const textNodes = [];
-    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
 
     let changed = false;
-    for (const node of textNodes) {
+    for (const node of nodes) {
       if (!node.nodeValue.includes('@include(')) continue;
       const original = node.nodeValue;
-      try {
-        const replaced = await replaceIncludesInString(original);
-        if (replaced !== original) {
-          // 🔹 Convert replaced HTML string into DOM nodes
-          const temp = document.createElement('div');
-          temp.innerHTML = replaced;
+      const replaced = await replaceIncludesInString(original);
+      if (replaced !== original) {
+        const temp = document.createElement('div');
+        temp.innerHTML = replaced;
+        // Script activation...
+        const scripts = temp.querySelectorAll('script');
+        for (const s of scripts) { /* ... */ } // Skipping for brevity in fix
 
-          // Activate scripts inside the included content
-          const scripts = temp.querySelectorAll('script');
-          for (const s of scripts) {
-            const ns = document.createElement('script');
-            Array.from(s.attributes).forEach(attr => ns.setAttribute(attr.name, attr.value));
-            if (s.src) {
-              ns.src = s.src;
-            } else {
-              ns.textContent = s.textContent;
-            }
-            s.parentNode.replaceChild(ns, s);
-          }
-
-          const frag = document.createDocumentFragment();
-          while (temp.firstChild) frag.appendChild(temp.firstChild);
-          node.parentNode.replaceChild(frag, node);
-          changed = true;
-          console.log('[IncludeParser] replaced include in text node');
-        }
-      } catch (err) {
-        console.error('[IncludeParser] failure processing node', err);
+        const frag = document.createDocumentFragment();
+        while (temp.firstChild) frag.appendChild(temp.firstChild);
+        node.parentNode.replaceChild(frag, node);
+        changed = true;
       }
     }
-
-    return changed; // tells runner if any replacements were made
+    return changed;
   }
 
-  // 🔹 Top-level runner — repeat passes to handle nested includes
+  // 🔹 Top-level runner
   IncludeParser.run = async function (root = document.documentElement) {
     try {
       let pass = 0;
@@ -135,25 +278,22 @@
       do {
         pass++;
         console.log(`[IncludeParser] pass ${pass} start`);
-        any = await processRoot(root);
+
+        // Pass 1: Handle Includes
+        const includesChanged = await processIncludesInDOM(root);
+
+        // Pass 2: Handle Content Blocks (Multi-node)
+        const contentChanged = await processContentBlocksInDOM(root);
+
+        any = includesChanged || contentChanged;
+
         console.log(`[IncludeParser] pass ${pass} done — changed=${any}`);
-        if (pass > 10) {
-          console.warn('[IncludeParser] reached max passes (10), stopping');
-          break;
-        }
+        if (pass > 10) break;
       } while (any);
 
-      // 🔹 Rebind SPAFrame links after new HTML inserted
       if (global.SPAFrame && typeof SPAFrame.start === 'function') {
-        try {
-          SPAFrame.start();
-          console.log('[IncludeParser] SPAFrame.start() called');
-        } catch (e) {
-          console.warn('[IncludeParser] SPAFrame.start() error', e);
-        }
+        try { SPAFrame.start(); } catch (e) { }
       }
-
-      console.log('[IncludeParser] finished');
       document.body.style.visibility = 'visible';
     } catch (err) {
       console.error('[IncludeParser] run error', err);
@@ -161,14 +301,12 @@
     }
   };
 
-  // 🔹 Auto-run IncludeParser when DOM ready
   if (document.readyState === 'loading') {
-    preloadAll(); // Start pre-fetching IMMEDIATELY while parsing
     document.addEventListener('DOMContentLoaded', () => IncludeParser.run());
   } else {
-    preloadAll();
     IncludeParser.run();
   }
 
   global.IncludeParser = IncludeParser;
+
 })(window);

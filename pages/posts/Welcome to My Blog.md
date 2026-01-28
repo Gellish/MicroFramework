@@ -1,0 +1,7 @@
+---
+title: Welcome to My Blog
+date: 2026-01-27
+tags: [blog, personal]
+---
+
+This is my first blog post! I'm excited to share my thoughts and experiences with you. Stay tuned for more interesting content coming soon.

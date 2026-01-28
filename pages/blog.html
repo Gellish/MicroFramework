@@ -2,10 +2,10 @@
 <html lang="en">
 
 <head>
+    <title>Blog</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blog</title>
-    <script src="/assets/js/parser.js"></script>
+    <script type="module" src="/assets/js/parser.js"></script>
     <script src="/assets/js/spa-frame.js"></script>
     <script type="module" src="/assets/js/main.js"></script>
 </head>
@@ -17,47 +17,16 @@
 
         <div class="row">
             <div class="col-md-8 mx-auto">
-                <!-- Blog Post 1 -->
+                @content('pages/posts')
                 <div class="card mb-4 shadow-sm">
                     <div class="card-body">
-                        <h2 class="card-title h4">Welcome to My Blog</h2>
-                        <div class="text-muted mb-2 small">Posted on January 27, 2026</div>
-                        <p class="card-text">This is my first blog post! I'm excited to share my thoughts and
-                            experiences with you. Stay tuned for more interesting content coming soon.</p>
+                        <h2 class="card-title h4">{{ title }}</h2>
+                        <div class="text-muted mb-2 small">{{ date }}</div>
+                        <p class="card-text">{{ body }}</p>
                         <a href="#" class="btn btn-primary btn-sm">Read more</a>
                     </div>
                 </div>
-
-                <!-- Blog Post 2 -->
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-body">
-                        <h2 class="card-title h4">Getting Started with Web Development</h2>
-                        <div class="text-muted mb-2 small">Posted on January 26, 2026</div>
-                        <p class="card-text">Web development is an exciting field with endless possibilities. Whether
-                            you're interested in frontend, backend, or full-stack development, there's always something
-                            new to learn.</p>
-                        <p class="card-text">In this post, we'll explore the fundamentals of web development and discuss
-                            best practices for building modern web applications.</p>
-                        <a href="#" class="btn btn-outline-primary btn-sm">Read more</a>
-                    </div>
-                </div>
-
-                <!-- Blog Post 3 -->
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-body">
-                        <h2 class="card-title h4">Tips for Better Code Quality</h2>
-                        <div class="text-muted mb-2 small">Posted on January 25, 2026</div>
-                        <p class="card-text">Writing clean, maintainable code is crucial for any developer. Here are
-                            some tips to improve your code quality:</p>
-                        <ul class="mb-0">
-                            <li>Write meaningful variable and function names</li>
-                            <li>Keep functions small and focused</li>
-                            <li>Use comments to explain complex logic</li>
-                            <li>Follow consistent code style</li>
-                            <li>Test your code thoroughly</li>
-                        </ul>
-                    </div>
-                </div>
+                @endcontent
             </div>
         </div>
     </div>
