@@ -29,6 +29,47 @@
             <div class="mb-3">
                 <input type="text" class="form-control form-control-lg" id="postTitleInput" placeholder="Post Title">
             </div>
+
+            <!-- Source Selector (Visible only for new posts or informative for existing) -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Storage</label>
+                    <select class="form-select" id="sourceSelector">
+                        <option value="database">Database (Supabase)</option>
+                        <option value="local">Offline File (Markdown)</option>
+                    </select>
+                </div>
+                <div class="col-md-6" id="pathContainer" style="display:none;">
+                    <label class="form-label">File Path</label>
+                    <input type="text" class="form-control" id="pathInput" placeholder="src/route/contents/my-post.md">
+                    <div class="form-text">Will be auto-generated from title if empty.</div>
+                </div>
+            </div>
+
+            <!-- Metadata Fields (Collapsed by default or always visible in local mode) -->
+            <div id="metadataFields" style="display:none;" class="card mb-3 bg-light">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Frontmatter Metadata</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Slug</label>
+                            <input type="text" class="form-control" id="metaSlug" placeholder="my-post-slug">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Date</label>
+                            <input type="date" class="form-control" id="metaDate">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Tags (comma separated)</label>
+                            <input type="text" class="form-control" id="metaTags" placeholder="webdev, frontend, react">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" id="metaDescription" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <textarea id="markdownEditor"></textarea>
         </div>
     </div>
@@ -40,10 +81,18 @@
 <script type="module">
     import { postsService } from '/src/api/index.js';
     import { IncludeParser } from '/src/assets/js/parser.js';
+    import jsyaml from 'js-yaml'; // Vite resolves this from node_modules
 
     const saveBtn = document.getElementById('saveBtn');
     const titleInput = document.getElementById('postTitleInput');
     const editorTitle = document.getElementById('editorTitle');
+
+    // Metadata Inputs
+    const metaDiv = document.getElementById('metadataFields');
+    const metaSlug = document.getElementById('metaSlug');
+    const metaDate = document.getElementById('metaDate');
+    const metaTags = document.getElementById('metaTags');
+    const metaDesc = document.getElementById('metaDescription');
 
     // Initialize EasyMDE
     const easyMDE = new EasyMDE({
@@ -58,34 +107,98 @@
 
     const params = new URLSearchParams(window.location.search);
     const postId = params.get('id');
-    const postSource = params.get('source'); // 'database' or 'local'
+    const urlSource = params.get('source'); // 'database' or 'local'
     const postPath = params.get('path'); // for local files
+
+    const sourceSelector = document.getElementById('sourceSelector');
+    const pathContainer = document.getElementById('pathContainer');
+    const pathInput = document.getElementById('pathInput');
+
+    // UI Logic: Handle Source Selection
+    function updateUIForSource() {
+        const mode = sourceSelector.value;
+        if (mode === 'local') {
+            pathContainer.style.display = 'block';
+            metaDiv.style.display = 'block';
+        } else {
+            pathContainer.style.display = 'none';
+            metaDiv.style.display = 'none';
+        }
+    }
+    sourceSelector.addEventListener('change', updateUIForSource);
 
     let currentPost = null;
 
     async function loadPost() {
         if (!postId && !postPath) {
             editorTitle.textContent = "New Post";
+            // New Post Mode: Enable selector
+            sourceSelector.disabled = false;
+            // Set default date
+            metaDate.valueAsDate = new Date();
             return;
         }
 
+        // Edit Mode: Lock selector to the current source
+        sourceSelector.value = urlSource || 'database';
+        sourceSelector.disabled = true;
+        updateUIForSource();
+
         try {
-            if (postSource === 'database') {
+            if (sourceSelector.value === 'database') {
                 currentPost = await postsService.getById(postId);
                 titleInput.value = currentPost.title;
                 easyMDE.value(currentPost.content || '');
-            } else if (postSource === 'local') {
-                // Find local post by ID (slug) or Path from Parser
-                // We re-fetch all to find it. Optimized approach: Parser.getPostBySlug?
-                // But getLocalPosts returns source/path.
+            } else if (sourceSelector.value === 'local') {
                 const allLocal = IncludeParser.getLocalPosts();
                 const found = allLocal.find(p => p.path === postPath || p.id === postId);
 
                 if (found) {
                     currentPost = found;
-                    titleInput.value = found.title;
-                    easyMDE.value(found.content || ''); // rawFull content
+
+                    // Parse Frontmatter using regex from parser.js logic
+                    // found.content is rawFull
+                    const raw = found.content;
+                    const fmRegex = /^-{3,}\r?\n([\s\S]+?)\r?\n-{3,}\r?\n([\s\S]*)/;
+                    const match = raw.match(fmRegex);
+
+                    if (match) {
+                        try {
+                            const metadata = jsyaml.load(match[1]);
+                            titleInput.value = metadata.title || found.title;
+                            metaSlug.value = metadata.slug || '';
+                            // Handle Date
+                            if (metadata.date) {
+                                // Try to format date for input type=date (YYYY-MM-DD)
+                                const d = new Date(metadata.date);
+                                if (!isNaN(d)) {
+                                    metaDate.value = d.toISOString().split('T')[0];
+                                }
+                            }
+                            // Handle Tags
+                            if (Array.isArray(metadata.tags)) {
+                                metaTags.value = metadata.tags.join(', ');
+                            } else if (typeof metadata.tags === 'string') {
+                                metaTags.value = metadata.tags;
+                            }
+                            metaDesc.value = metadata.description || '';
+
+                            // Set Editor Body (Strip frontmatter)
+                            easyMDE.value(match[2].trim());
+                        } catch (e) {
+                            console.warn('YAML Parse Error', e);
+                            titleInput.value = found.title;
+                            easyMDE.value(raw); // Fallback
+                        }
+                    } else {
+                        // No frontmatter
+                        titleInput.value = found.title;
+                        easyMDE.value(raw);
+                    }
+
                     editorTitle.textContent = "Edit Local File";
+                    pathInput.value = found.path;
+                    pathInput.disabled = true;
                 } else {
                     alert('Local file not found!');
                 }
@@ -102,30 +215,60 @@
         saveBtn.disabled = true;
         saveBtn.textContent = 'Saving...';
 
-        const content = easyMDE.value();
+        const bodyContent = easyMDE.value();
         const title = titleInput.value;
+        const mode = sourceSelector.value;
 
         try {
-            if (postSource === 'database') {
+            if (mode === 'database') {
                 if (postId) {
-                    await postsService.update(postId, { title, content });
+                    await postsService.update(postId, { title, content: bodyContent });
                 } else {
-                    await postsService.create({ title, content });
+                    await postsService.create({ title, content: bodyContent });
                 }
                 alert('Saved to Database!');
-            } else if (postSource === 'local') {
-                // Call our Custom Vite Middleware API
+                if (!postId) window.location.href = '/admin/posts';
+            } else if (mode === 'local') {
+                // Determine Path
+                let targetPath = pathInput.value;
+                // Auto-generate slug/path if missing
+                const slugCandidate = metaSlug.value || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+                if (!targetPath) {
+                    targetPath = `src/route/contents/${slugCandidate}.md`;
+                }
+
+                // Construct Tags Array
+                const tagsRaw = metaTags.value.split(',').map(t => t.trim()).filter(t => t);
+
+                // Construct Date
+                const dateVal = metaDate.value || new Date().toISOString().split('T')[0];
+
+                // Construct Metadata Object
+                const metadata = {
+                    title: title,
+                    slug: slugCandidate,
+                    date: dateVal,
+                    tags: tagsRaw,
+                    description: metaDesc.value
+                };
+
+                // Build YAML Frontmatter
+                const yamlBlock = jsyaml.dump(metadata);
+                const finalContent = `---\n${yamlBlock}---\n\n${bodyContent}`;
+
+                // Call save API
                 const response = await fetch('/__api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        path: postPath,
-                        content: content
+                        path: targetPath,
+                        content: finalContent
                     })
                 });
 
                 if (!response.ok) throw new Error('Local save failed: ' + response.statusText);
-                alert('Saved to Local File System!');
+                alert('Saved to Local File System: ' + targetPath);
+                if (!postId) window.location.href = '/admin/posts';
             }
         } catch (err) {
             console.error('Save error:', err);

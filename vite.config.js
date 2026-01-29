@@ -57,13 +57,23 @@ export default defineConfig({
                                     fullPath = resolve(__dirname, path);
                                 }
 
-                                // Security/Sanity Check: Only allow writing to src/route/contents ideally, 
-                                // but for now effectively everywhere in src/route is okay for this admin tool.
-                                if (!fullPath.includes('src')) {
+                                // Debug log
+                                console.log('[Vite Save API] Input:', path);
+                                console.log('[Vite Save API] Resolved:', fullPath);
+
+                                // Normalized check for 'src' directory
+                                // logical check: must be within project root/src
+                                if (!fullPath.toLowerCase().includes('src')) {
                                     console.warn('Blocked write attempt outside src:', fullPath);
                                     res.statusCode = 403;
                                     res.end(JSON.stringify({ error: 'Access Denied: Path outside src' }));
                                     return;
+                                }
+
+                                // Ensure directory exists
+                                const dir = fullPath.substring(0, fullPath.lastIndexOf(fullPath.includes('/') ? '/' : '\\'));
+                                if (!fs.existsSync(dir)) {
+                                    fs.mkdirSync(dir, { recursive: true });
                                 }
 
                                 fs.writeFileSync(fullPath, content, 'utf-8');
