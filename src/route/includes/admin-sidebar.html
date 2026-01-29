@@ -3,9 +3,9 @@
         <span class="fs-4">Admin Panel</span>
     </a>
     <hr>
-    <ul class="nav nav-pills flex-column mb-auto">
+    <ul class="nav nav-pills flex-column mb-auto" id="adminSidebarNav">
         <li class="nav-item">
-            <a href="/admin" class="nav-link active" aria-current="page">
+            <a href="/admin" class="nav-link text-white">
                 Home
             </a>
         </li>
@@ -25,6 +25,33 @@
             </a>
         </li>
     </ul>
+
+    <style>
+        #adminSidebarNav .nav-link.active {
+            background-color: #0d6efd !important;
+            color: white !important;
+        }
+    </style>
+
+    <script>
+        (function () {
+            const path = window.location.pathname === '/admin' || window.location.pathname === '/admin/'
+                ? '/admin'
+                : window.location.pathname.replace(/\/$/, '');
+
+            const links = document.querySelectorAll('#adminSidebarNav .nav-link');
+            links.forEach(link => {
+                const href = link.getAttribute('href');
+                if (href === path) {
+                    link.classList.add('active');
+                    link.classList.remove('text-white');
+                } else {
+                    link.classList.remove('active');
+                    link.classList.add('text-white');
+                }
+            });
+        })();
+    </script>
     <hr>
     <div class="dropdown">
         <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser1"
