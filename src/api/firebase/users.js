@@ -43,5 +43,28 @@ export const usersService = {
         const q = query(postsRef, where("userId", "==", userId));
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    },
+
+    /**
+     * Update a user record
+     * @param {string} id 
+     * @param {object} updates 
+     */
+    async update(id, updates) {
+        const { updateDoc } = await import("firebase/firestore");
+        const docRef = doc(db, COLLECTION_NAME, id);
+        await updateDoc(docRef, updates);
+        return { id, ...updates };
+    },
+
+    /**
+     * Delete a user
+     * @param {string} id 
+     */
+    async delete(id) {
+        const { deleteDoc } = await import("firebase/firestore");
+        const docRef = doc(db, COLLECTION_NAME, id);
+        await deleteDoc(docRef);
+        return true;
     }
 };

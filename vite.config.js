@@ -37,6 +37,106 @@ export default defineConfig({
         {
             name: 'clean-urls',
             configureServer(server) {
+                // Load Env for Service Key (Dev Mode Only)
+                const { loadEnv } = require('vite');
+                const env = loadEnv('development', process.cwd(), '');
+                const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+                const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
+
+                // Admin User Creation API
+                server.middlewares.use('/__api/admin/create-user', async (req, res, next) => {
+                    if (req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk.toString(); });
+                        req.on('end', async () => {
+                            try {
+                                if (!serviceKey) {
+                                    res.statusCode = 500;
+                                    res.end(JSON.stringify({ error: 'Missing SUPABASE_SERVICE_ROLE_KEY in .env on server.' }));
+                                    return;
+                                }
+
+                                const { createClient } = require('@supabase/supabase-js');
+                                const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
+                                    auth: {
+                                        autoRefreshToken: false,
+                                        persistSession: false
+                                    }
+                                });
+
+                                const { email, password, metadata } = JSON.parse(body);
+
+                                const { data, error } = await supabaseAdmin.auth.admin.createUser({
+                                    email,
+                                    password,
+                                    email_confirm: true, // Auto-confirm
+                                    user_metadata: metadata
+                                });
+
+                                if (error) throw error;
+
+                                console.log('[Vite API] Created User:', email);
+                                res.statusCode = 200;
+                                res.end(JSON.stringify({ user: data.user }));
+
+                            } catch (err) {
+                                console.error('Create User Error:', err);
+                                res.statusCode = 500;
+                                res.end(JSON.stringify({ error: err.message }));
+                            }
+                        });
+                        return;
+                    }
+                    next();
+                });
+
+                // Admin User Update API (Bypass RLS)
+                server.middlewares.use('/__api/admin/update-user', async (req, res, next) => {
+                    if (req.method === 'POST') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk.toString(); });
+                        req.on('end', async () => {
+                            try {
+                                if (!serviceKey) {
+                                    res.statusCode = 500;
+                                    res.end(JSON.stringify({ error: 'Missing SUPABASE_SERVICE_ROLE_KEY' }));
+                                    return;
+                                }
+
+                                const { createClient } = require('@supabase/supabase-js');
+                                const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+
+                                const { id, updates } = JSON.parse(body);
+
+                                // 1. Update Profiles table
+                                const { data: profile, error: profileError } = await supabaseAdmin
+                                    .from('profiles')
+                                    .upsert({ id, ...updates })
+                                    .select()
+                                    .single();
+
+                                if (profileError) throw profileError;
+
+                                // 2. Sync Auth Metadata
+                                if (updates.username) {
+                                    await supabaseAdmin.auth.admin.updateUserById(id, {
+                                        user_metadata: { username: updates.username }
+                                    });
+                                }
+
+                                res.statusCode = 200;
+                                res.end(JSON.stringify({ success: true, profile }));
+                            } catch (err) {
+                                console.error('[Vite API] Update User Error:', err);
+                                res.statusCode = 500;
+                                res.end(JSON.stringify({ error: err.message }));
+                            }
+                        });
+                        return;
+                    }
+                    next();
+                });
+
                 // Local File Save API
                 server.middlewares.use('/__api/save', (req, res, next) => {
                     if (req.method === 'POST') {

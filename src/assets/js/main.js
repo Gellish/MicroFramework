@@ -2,7 +2,8 @@
 import '../css/main.css'
 
 // Import all of Bootstrap's JS
-import 'bootstrap'
+import * as bootstrap from 'bootstrap'
+window.bootstrap = bootstrap;
 
 // Import Bootstrap's CSS
 import 'bootstrap/dist/css/bootstrap.min.css'

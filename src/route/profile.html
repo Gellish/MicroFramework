@@ -1,0 +1,113 @@
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <h2 class="text-center mb-4">Your Profile</h2>
+
+                <form id="profileForm">
+                    <div class="mb-3">
+                        <label for="email" class="form-label text-muted small fw-bold">Email Address</label>
+                        <input type="email" class="form-control bg-light" id="email" disabled>
+                        <div class="form-text">Email cannot be changed here.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="fullName" class="form-label text-muted small fw-bold">Display Name</label>
+                        <input type="text" class="form-control" id="fullName" placeholder="Enter your name" required>
+                    </div>
+
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary py-2 fw-bold" id="saveProfileBtn">
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+
+                <div id="statusMsg" class="mt-3 text-center" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="mt-4 text-center">
+            <a href="/" class="text-decoration-none text-muted small">← Back to Home</a>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { authService, usersService } from '/src/api/index.js';
+
+    const profileForm = document.getElementById('profileForm');
+    const saveProfileBtn = document.getElementById('saveProfileBtn');
+    const statusMsg = document.getElementById('statusMsg');
+    const emailInput = document.getElementById('email');
+    const nameInput = document.getElementById('fullName');
+    let currentUserId = null;
+
+    async function loadProfile() {
+        try {
+            const user = await authService.getCurrentUser();
+            if (!user) {
+                window.location.href = '/login';
+                return;
+            }
+
+            currentUserId = user.id;
+            emailInput.value = user.email;
+            nameInput.value = user.user_metadata?.username || user.user_metadata?.full_name || '';
+        } catch (error) {
+            console.error('Failed to load profile:', error);
+            showAlert('Failed to load user data', 'danger');
+        }
+    }
+
+    profileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const newName = nameInput.value.trim();
+        console.log('Submitting profile update...', { id: currentUserId, name: newName });
+
+        if (!newName) {
+            showAlert('Name cannot be empty', 'danger');
+            return;
+        }
+
+        if (!currentUserId) {
+            console.error('Submit failed: currentUserId is null');
+            showAlert('Error: Your session could not be verified.', 'danger');
+            return;
+        }
+
+        saveProfileBtn.disabled = true;
+        saveProfileBtn.textContent = 'Saving...';
+        statusMsg.className = 'mt-3 text-center text-muted small';
+        statusMsg.textContent = 'Syncing profile...';
+        statusMsg.style.display = 'block';
+
+        try {
+            // 1. Update Auth Metadata
+            console.log('1. Updating Auth Metadata...');
+            await authService.updateProfile({
+                data: { username: newName }
+            });
+
+            // 2. Update database profile record
+            console.log('2. Updating Profiles table...');
+            await usersService.update(currentUserId, { username: newName });
+
+            console.log('✅ Update successful!');
+            showAlert('Profile updated successfully!');
+            statusMsg.style.display = 'none';
+
+            await loadProfile();
+        } catch (error) {
+            console.error('❌ Update failed:', error);
+            showAlert('Update failed: ' + error.message, 'danger');
+            statusMsg.style.display = 'none';
+        } finally {
+            saveProfileBtn.disabled = false;
+            saveProfileBtn.textContent = 'Save Changes';
+        }
+    });
+
+    loadProfile();
+</script>

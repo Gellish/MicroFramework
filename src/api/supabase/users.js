@@ -54,5 +54,20 @@ export const usersService = {
             .eq('id', id);
         if (error) throw error;
         return true;
+    },
+
+    /**
+     * Update or Create a user profile record
+     * @param {string|number} id 
+     * @param {object} updates 
+     */
+    async update(id, updates) {
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .upsert({ id, ...updates })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
     }
 };
