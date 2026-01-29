@@ -59,7 +59,7 @@
             <strong>Admin User</strong>
         </a>
         <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser1">
-            <li><a class="dropdown-item" href="/src/route/admin/profile.html">Profile</a></li>
+            <li><a class="dropdown-item" href="/admin/profile">Profile</a></li>
             <li>
                 <hr class="dropdown-divider">
             </li>
@@ -71,7 +71,7 @@
 <script type="module">
     import { authService } from '/src/api/index.js';
 
-    document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+    document.getElementById('logoutBtn')?.addEventListener('click', async (e) => {
         e.preventDefault();
         try {
             await authService.logout();

@@ -1,0 +1,55 @@
+<nav class="navbar navbar-expand navbar-light bg-white border-bottom p-3">
+    <div class="container-fluid">
+        <div class="ms-auto d-flex align-items-center">
+            <div class="dropdown">
+                <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle"
+                    id="adminUserDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <img src="/src/assets/images/admin-avatar.png" alt="Admin" width="40" height="40"
+                        class="rounded-circle me-2 border">
+                    <div class="d-none d-md-block text-dark">
+                        <div class="fw-bold lh-1" id="adminNavName">Admin User</div>
+                        <small class="text-muted" id="adminNavRole">Super Admin</small>
+                    </div>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" aria-labelledby="adminUserDropdown">
+                    <li>
+                        <h6 class="dropdown-header">Manage Account</h6>
+                    </li>
+                    <li><a class="dropdown-item py-2" href="/profile"><i class="bi bi-person me-2"></i> Profile</a></li>
+                    <li><a class="dropdown-item py-2" href="#"><i class="bi bi-gear me-2"></i> Settings</a></li>
+                    <li>
+                        <hr class="dropdown-divider">
+                    </li>
+                    <li><button class="dropdown-item py-2 text-danger" id="adminLogoutBtn"><i
+                                class="bi bi-box-arrow-right me-2"></i> Logout</button></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<script type="module">
+    import { authService } from '/src/api/index.js';
+
+    async function loadAdminNav() {
+        try {
+            const user = await authService.getCurrentUser();
+            if (user) {
+                const nameDisplay = document.getElementById('adminNavName');
+                const roleDisplay = document.getElementById('adminNavRole');
+
+                if (nameDisplay) nameDisplay.textContent = user.user_metadata?.username || user.user_metadata?.full_name || 'Admin';
+                if (roleDisplay) roleDisplay.textContent = user.user_metadata?.role || 'User';
+            }
+        } catch (error) {
+            console.error('Failed to load admin nav user:', error);
+        }
+    }
+
+    document.getElementById('adminLogoutBtn')?.addEventListener('click', async () => {
+        await authService.logout();
+        window.location.href = '/login';
+    });
+
+    loadAdminNav();
+</script>

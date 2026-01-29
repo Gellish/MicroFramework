@@ -28,7 +28,7 @@
         </div>
 
         <div class="mt-4 text-center">
-            <a href="/" class="text-decoration-none text-muted small">← Back to Home</a>
+            <a href="/" id="backToHomeBtn" class="text-decoration-none text-muted small">← Back to Home</a>
         </div>
     </div>
 </div>
@@ -44,6 +44,13 @@
     let currentUserId = null;
 
     async function loadProfile() {
+        // Dynamic Back Link
+        const backBtn = document.getElementById('backToHomeBtn');
+        if (backBtn && window.location.pathname.startsWith('/admin')) {
+            backBtn.href = '/admin';
+            backBtn.textContent = '← Back to Admin Home';
+        }
+
         try {
             const user = await authService.getCurrentUser();
             if (!user) {
