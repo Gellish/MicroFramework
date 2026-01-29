@@ -34,14 +34,19 @@ A **lightweight Single Page Application micro-framework** built on **Vite**, **B
 
 ```
 project/
-├── assets/
-│   ├── css/            # Custom styles
-│   ├── js/             # Core framework scripts (IncludeParser, SPAFrame)
-│   └── images/         # Images and illustrations
-├── includes/           # Reusable HTML components (nav, footer)
-├── pages/              # Application pages (blog, about, contact)
-├── index.html          # Entry point (Home)
-├── vite.config.js      # Vite config (HTML transform & routing)
+├── src/
+│   ├── admin.html      # Admin Dashboard Layout
+│   ├── app.html        # Public App Layout
+│   ├── api/            # Hybrid API Adapters (Supabase, Firebase, REST)
+│   ├── assets/         # CSS, JS (SPAFrame, Parser), Images
+│   ├── lib/            # Shared Libraries (Supabase Client, etc.)
+│   └── route/          # Application Routes
+│       ├── admin/          # Admin Dashboard Pages (editor, users, posts)
+│       ├── contents/       # "Offline" Markdown Posts
+│       ├── includes/       # Reusable Partials (sidebar, navbar)
+│       ├── login.html      # Auth Pages
+│       └── index.html      # Public Home
+├── vite.config.js      # Vite Config (Middleware & Transforms)
 └── package.json        # Dependencies & scripts
 ```
 
