@@ -14,7 +14,11 @@
   "license": "ISC",
   "dependencies": {
     "@popperjs/core": "^2.11.8",
+    "@supabase/supabase-js": "^2.93.2",
     "bootstrap": "^5.3.8",
+    "dotenv": "^17.2.3",
+    "easymde": "^2.20.0",
+    "firebase": "^12.8.0",
     "js-yaml": "^4.1.1",
     "marked": "^17.0.1",
     "vite": "^7.3.1"

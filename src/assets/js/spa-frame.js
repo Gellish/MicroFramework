@@ -99,9 +99,45 @@ async function navigate(url, push = true) {
 
     // Re-run all scripts in the new body
     doc.body.querySelectorAll("script").forEach((s) => {
+      // If script has a src, check if it's already loaded to avoid duplication
+      // BUT: Vite dev mode extracts page logic into 'html-proxy' scripts.
+      // We MUST run these every time the page is viewed.
+      if (s.src) {
+        const isViteProxy = s.src.includes('html-proxy');
+        const isGlobal = s.src.includes('@vite/client') ||
+          s.src.includes('/src/assets/js/main.js') ||
+          s.src.includes('bootstrap'); // Add other globals if needed
+
+        // Only skip if it's a known global and NOT a page-specific proxy
+        if (!isViteProxy && isGlobal) {
+          const isLoaded = Array.from(document.scripts).some(existing => existing.src === s.src);
+          if (isLoaded) {
+            console.log(`[SPAFrame] Skipping duplicate global script: ${s.src}`);
+            return;
+          }
+        }
+      }
+
       const ns = document.createElement("script");
-      if (s.src) ns.src = s.src;
+      if (s.src) {
+        // FORCE re-execution of local page scripts (html-proxy) by checking cache busting
+        // Global scripts (@vite etc) are skipped by logic above.
+        // For page logic, we MUST force the browser to treat it as a new module.
+        if (s.src.includes('html-proxy') || s.src.includes('src/route')) {
+          const url = new URL(s.src, location.href);
+          url.searchParams.set('spa_t', Date.now());
+          ns.src = url.toString();
+        } else {
+          ns.src = s.src;
+        }
+      }
       else ns.textContent = s.textContent;
+
+      // Copy all attributes (e.g. type="module")
+      Array.from(s.attributes).forEach(attr => {
+        ns.setAttribute(attr.name, attr.value);
+      });
+
       document.head.appendChild(ns);
     });
 

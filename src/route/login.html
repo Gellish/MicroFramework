@@ -7,16 +7,17 @@
                 <div class="card-body p-5">
                     <h1 class="h3 mb-4 fw-normal text-center">Please sign in</h1>
 
-                    <form onsubmit="event.preventDefault(); alert('Login logic would go here!');">
+                    <form id="loginForm">
+                        <div class="alert alert-danger d-none" id="errorAlert"></div>
                         <div class="form-floating mb-3">
-                            <input type="email" class="form-control" id="floatingInput" placeholder="name@example.com"
+                            <input type="email" class="form-control" id="emailInput" placeholder="name@example.com"
                                 required>
-                            <label for="floatingInput">Email address</label>
+                            <label for="emailInput">Email address</label>
                         </div>
                         <div class="form-floating mb-3">
-                            <input type="password" class="form-control" id="floatingPassword" placeholder="Password"
+                            <input type="password" class="form-control" id="passwordInput" placeholder="Password"
                                 required>
-                            <label for="floatingPassword">Password</label>
+                            <label for="passwordInput">Password</label>
                         </div>
 
                         <div class="checkbox mb-3">
@@ -24,7 +25,7 @@
                                 <input type="checkbox" value="remember-me"> Remember me
                             </label>
                         </div>
-                        <button class="w-100 btn btn-lg btn-primary" type="submit">Sign in</button>
+                        <button class="w-100 btn btn-lg btn-primary" type="submit" id="submitBtn">Sign in</button>
 
                         <hr class="my-4">
                         <div class="text-center">
@@ -35,4 +36,42 @@
             </div>
         </div>
     </div>
+</div>
+
+<script type="module">
+    import { authService } from '/src/api/index.js';
+
+    const loginForm = document.getElementById('loginForm');
+    const errorAlert = document.getElementById('errorAlert');
+    const submitBtn = document.getElementById('submitBtn');
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // Reset state
+        errorAlert.classList.add('d-none');
+        errorAlert.textContent = '';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Signing in...';
+
+        const email = document.getElementById('emailInput').value;
+        const password = document.getElementById('passwordInput').value;
+
+        try {
+            console.log('Attempting login with:', email);
+            const user = await authService.login(email, password);
+            console.log('Login successful:', user);
+
+            // Redirect to home/dashboard
+            window.location.href = '/admin';
+        } catch (error) {
+            console.error('Login failed:', error);
+            errorAlert.textContent = error.message;
+            errorAlert.classList.remove('d-none');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Sign in';
+        }
+    });
+</script>
 </div>

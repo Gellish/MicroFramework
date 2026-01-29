@@ -1,0 +1,139 @@
+<title>Edit Post</title>
+<link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
+<style>
+    .editor-toolbar {
+        background-color: #fff;
+        opacity: 1;
+        border-radius: 4px 4px 0 0;
+    }
+
+    .CodeMirror {
+        border-radius: 0 0 4px 4px;
+        min-height: 400px;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h1 class="h3" id="editorTitle">Edit Post</h1>
+            <div>
+                <button class="btn btn-secondary me-2" onclick="history.back()">Cancel</button>
+                <button class="btn btn-primary" id="saveBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="mb-3">
+                <input type="text" class="form-control form-control-lg" id="postTitleInput" placeholder="Post Title">
+            </div>
+            <textarea id="markdownEditor"></textarea>
+        </div>
+    </div>
+</div>
+
+<!-- Load EasyMDE from CDN (since we npm installed it, we could also bundle it, but CDN is easier for this HTML setup) -->
+<script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
+
+<script type="module">
+    import { postsService } from '/src/api/index.js';
+    import { IncludeParser } from '/src/assets/js/parser.js';
+
+    const saveBtn = document.getElementById('saveBtn');
+    const titleInput = document.getElementById('postTitleInput');
+    const editorTitle = document.getElementById('editorTitle');
+
+    // Initialize EasyMDE
+    const easyMDE = new EasyMDE({
+        element: document.getElementById('markdownEditor'),
+        autosave: {
+            enabled: true,
+            uniqueId: "editor_autosave_" + (new URLSearchParams(window.location.search).get('id') || 'new'),
+            delay: 1000,
+        },
+        spellChecker: false
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const postId = params.get('id');
+    const postSource = params.get('source'); // 'database' or 'local'
+    const postPath = params.get('path'); // for local files
+
+    let currentPost = null;
+
+    async function loadPost() {
+        if (!postId && !postPath) {
+            editorTitle.textContent = "New Post";
+            return;
+        }
+
+        try {
+            if (postSource === 'database') {
+                currentPost = await postsService.getById(postId);
+                titleInput.value = currentPost.title;
+                easyMDE.value(currentPost.content || '');
+            } else if (postSource === 'local') {
+                // Find local post by ID (slug) or Path from Parser
+                // We re-fetch all to find it. Optimized approach: Parser.getPostBySlug?
+                // But getLocalPosts returns source/path.
+                const allLocal = IncludeParser.getLocalPosts();
+                const found = allLocal.find(p => p.path === postPath || p.id === postId);
+
+                if (found) {
+                    currentPost = found;
+                    titleInput.value = found.title;
+                    easyMDE.value(found.content || ''); // rawFull content
+                    editorTitle.textContent = "Edit Local File";
+                } else {
+                    alert('Local file not found!');
+                }
+            }
+        } catch (err) {
+            console.error('Error loading post:', err);
+            alert('Failed to load post');
+        }
+    }
+
+    loadPost();
+
+    saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        const content = easyMDE.value();
+        const title = titleInput.value;
+
+        try {
+            if (postSource === 'database') {
+                if (postId) {
+                    await postsService.update(postId, { title, content });
+                } else {
+                    await postsService.create({ title, content });
+                }
+                alert('Saved to Database!');
+            } else if (postSource === 'local') {
+                // Call our Custom Vite Middleware API
+                const response = await fetch('/__api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path: postPath,
+                        content: content
+                    })
+                });
+
+                if (!response.ok) throw new Error('Local save failed: ' + response.statusText);
+                alert('Saved to Local File System!');
+            }
+        } catch (err) {
+            console.error('Save error:', err);
+            alert('Error saving: ' + err.message);
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Changes';
+        }
+    });
+
+</script>

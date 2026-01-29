@@ -331,8 +331,8 @@ IncludeParser.run = async function (root = document.documentElement) {
       if (pass > 10) break;
     } while (any);
 
-    if (global.SPAFrame && typeof SPAFrame.start === 'function') {
-      try { SPAFrame.start(); } catch (e) { }
+    if (window.SPAFrame && typeof window.SPAFrame.start === 'function') {
+      try { window.SPAFrame.start(); } catch (e) { }
     }
     document.body.style.visibility = 'visible';
   } catch (err) {
@@ -355,6 +355,21 @@ IncludeParser.getPostBySlug = function (slug) {
 
 IncludeParser.renderTemplate = function (template, data) {
   return renderTemplate(template, data);
+};
+
+// Return all indexed local markdown files
+IncludeParser.getLocalPosts = function () {
+  return Array.from(postIndex.values()).map(entry => {
+    // Parse on demand or use cached metadata
+    // entry has {path, metadata, rawBody, rawFull}
+    return {
+      id: entry.metadata.slug || 'local-' + Math.random().toString(36).substr(2, 9),
+      title: entry.metadata.title || 'Untitled Local Post',
+      content: entry.rawFull, // Use rawFull to preserve frontmatter for editing
+      source: 'local',
+      path: entry.path // This seems to be relative to root like '/src/route/...'
+    };
+  });
 };
 
 export { IncludeParser };

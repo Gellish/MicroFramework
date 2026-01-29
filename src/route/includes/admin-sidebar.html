@@ -1,0 +1,58 @@
+<div class="d-flex flex-column flex-shrink-0 p-3 text-white bg-dark" style="width: 280px; height: 100vh;">
+    <a href="/admin" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none">
+        <span class="fs-4">Admin Panel</span>
+    </a>
+    <hr>
+    <ul class="nav nav-pills flex-column mb-auto">
+        <li class="nav-item">
+            <a href="/admin" class="nav-link active" aria-current="page">
+                Home
+            </a>
+        </li>
+        <li>
+            <a href="/admin/posts" class="nav-link text-white">
+                Posts
+            </a>
+        </li>
+        <li>
+            <a href="/admin/users" class="nav-link text-white">
+                Users
+            </a>
+        </li>
+        <li>
+            <a href="#" class="nav-link text-white">
+                Settings
+            </a>
+        </li>
+    </ul>
+    <hr>
+    <div class="dropdown">
+        <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser1"
+            data-bs-toggle="dropdown" aria-expanded="false">
+            <strong>Admin User</strong>
+        </a>
+        <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser1">
+            <li><a class="dropdown-item" href="/src/route/admin/profile.html">Profile</a></li>
+            <li>
+                <hr class="dropdown-divider">
+            </li>
+            <li><a class="dropdown-item" href="#" id="logoutBtn">Sign out</a></li>
+        </ul>
+    </div>
+</div>
+
+<script type="module">
+    import { authService } from '/src/api/index.js';
+
+    document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+            await authService.logout();
+            console.log('Logged out successfully');
+            window.location.href = '/login';
+        } catch (error) {
+            console.error('Logout failed:', error);
+            alert('Logout failed: ' + error.message);
+        }
+    });
+</script>

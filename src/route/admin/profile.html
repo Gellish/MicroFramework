@@ -1,0 +1,147 @@
+<title>My Profile</title>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">My Profile</h1>
+        </div>
+    </div>
+
+    <!-- Avatar & Info -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm text-center p-3">
+                <div class="card-body">
+                    <img id="profileAvatar" src="https://via.placeholder.com/150" class="rounded-circle mb-3"
+                        width="120" height="120" alt="Avatar">
+                    <h5 class="card-title" id="profileEmailDisplay">Loading...</h5>
+                    <p class="text-muted" id="profileIdDisplay">UID: ...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Update Profile</h5>
+
+                    <form id="profileForm">
+                        <div class="alert alert-success d-none" id="successAlert">Profile updated!</div>
+                        <div class="alert alert-danger d-none" id="errorAlert"></div>
+
+                        <div class="mb-3">
+                            <label for="inputEmail" class="form-label">Email address</label>
+                            <input type="email" class="form-control" id="inputEmail">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="inputPassword" class="form-label">New Password (leave blank to keep
+                                current)</label>
+                            <input type="password" class="form-control" id="inputPassword">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="inputAvatarUrl" class="form-label">Avatar URL</label>
+                            <input type="url" class="form-control" id="inputAvatarUrl"
+                                placeholder="https://example.com/me.jpg">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="saveBtn">Save Changes</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { authService } from '/src/api/index.js';
+
+    const form = document.getElementById('profileForm');
+    const emailInput = document.getElementById('inputEmail');
+    const passwordInput = document.getElementById('inputPassword');
+    const avatarInput = document.getElementById('inputAvatarUrl');
+
+    const emailDisplay = document.getElementById('profileEmailDisplay');
+    const idDisplay = document.getElementById('profileIdDisplay');
+    const avatarDisplay = document.getElementById('profileAvatar');
+
+    const successAlert = document.getElementById('successAlert');
+    const errorAlert = document.getElementById('errorAlert');
+    const saveBtn = document.getElementById('saveBtn');
+
+    // Load User Data
+    async function loadUser() {
+        try {
+            const user = await authService.getCurrentUser();
+            if (!user) {
+                window.location.href = '/src/route/login.html';
+                return;
+            }
+
+            emailDisplay.textContent = user.email;
+            idDisplay.textContent = `UID: ${user.id}`;
+            emailInput.value = user.email;
+
+            // Supabase stores extra data in user_metadata
+            const meta = user.user_metadata || {};
+            if (meta.avatar_url) {
+                avatarDisplay.src = meta.avatar_url;
+                avatarInput.value = meta.avatar_url;
+            }
+        } catch (err) {
+            console.error('Error loading user:', err);
+        }
+    }
+
+    loadUser();
+
+    // Handle Updates
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        successAlert.classList.add('d-none');
+        errorAlert.classList.add('d-none');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        const updates = {};
+        const email = emailInput.value;
+        const password = passwordInput.value;
+        const avatarUrl = avatarInput.value;
+
+        // Only add fields if they are meaningful
+        if (email) updates.email = email;
+        if (password) updates.password = password;
+
+        // Update metadata for avatar
+        if (avatarUrl) {
+            updates.data = { avatar_url: avatarUrl };
+        }
+
+        try {
+            const user = await authService.updateProfile(updates);
+            console.log('User updated:', user);
+
+            // Refresh display
+            emailDisplay.textContent = user.email;
+            const meta = user.user_metadata || {};
+            if (meta.avatar_url) {
+                avatarDisplay.src = meta.avatar_url;
+            }
+
+            successAlert.classList.remove('d-none');
+            form.reset();
+            // Restore email (since reset clears it)
+            emailInput.value = user.email;
+            if (meta.avatar_url) avatarInput.value = meta.avatar_url;
+
+        } catch (error) {
+            console.error('Update failed:', error);
+            errorAlert.textContent = error.message;
+            errorAlert.classList.remove('d-none');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Changes';
+        }
+    });
+</script>
