@@ -60,6 +60,24 @@
         sessionStorage.setItem('post_ctx_' + id, JSON.stringify({ source, path }));
     };
 
+    window.copyToClipboard = (text, btn) => {
+        navigator.clipboard.writeText(text).then(() => {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-check-lg text-success" viewBox="0 0 16 16">
+                    <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425a.247.247 0 0 1 .02-.022Z"/>
+                </svg> <span class="text-success">Copied!</span>
+            `;
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+        });
+        // Stop propagation to prevent row click or other effects
+        if (event) event.stopPropagation();
+    };
+
     // Critical: Render cached data synchronusly to prevent "Loading..." flash
     (function () {
         try {
@@ -206,7 +224,13 @@
                     <td class="fw-bold">
                         ${post.title || 'Untitled'}
                         ${isLocal && post.path ? `<br><small class="text-muted">${post.path}</small>` : ''}
-                        ${post.source === 'event-store' ? `<br><small class="text-muted">ID: ${post.id.substring(0, 8)}...</small>` : ''}
+                        ${post.source === 'event-store'
+                    ? `<br><button class="btn btn-link p-0 text-muted" style="font-size: 0.8rem; text-decoration: none;" onclick="copyToClipboard('${post.id}', this)" title="Copy ID">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-files" viewBox="0 0 16 16">
+                                   <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
+                                 </svg> Copy ID
+                               </button>`
+                    : ''}
                     </td>
                     <td class="text-muted"><small>${textPreview}</small></td>
                     <td>
