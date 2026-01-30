@@ -1,0 +1,14 @@
+{
+  "eventId": "0c9e4c93-68a7-4dcf-94c0-de0a0ea0776c",
+  "aggregateId": "0cabbb25-5099-457b-8513-4225e205ffea",
+  "aggregateType": "user",
+  "eventType": "USER_CREATED",
+  "payload": {
+    "email": "admin@email.com",
+    "name": "Initial Admin",
+    "role": "admin",
+    "status": "active"
+  },
+  "version": 1,
+  "timestamp": "2026-01-30T03:39:41.070Z"
+}

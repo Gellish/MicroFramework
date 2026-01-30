@@ -4,7 +4,7 @@
     <div class="row mb-4">
         <div class="col-12 d-flex justify-content-between align-items-center">
             <h1 class="h3">Posts</h1>
-            <button class="btn btn-primary" onclick="window.location.href='/src/route/admin/editor.html'">
+            <button class="btn btn-primary" onclick="window.location.href='/admin/editor'">
                 <i class="bi bi-plus-lg"></i> New Post
             </button>
         </div>
@@ -55,6 +55,11 @@
 </div>
 
 <script>
+    // Help save context for clean URLs
+    window.setPostContext = (id, source, path) => {
+        sessionStorage.setItem('post_ctx_' + id, JSON.stringify({ source, path }));
+    };
+
     // Critical: Render cached data synchronusly to prevent "Loading..." flash
     (function () {
         try {
@@ -86,7 +91,7 @@
                                 <td class="text-muted"><small>${textPreview}</small></td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-secondary" 
-                                        onclick="window.location.href='/src/route/admin/editor.html?id=${post.id}&source=${post.source}&path=${encodeURIComponent(post.path || '')}'">
+                                        onclick="setPostContext('${post.id}', '${post.source}', '${post.path || ''}'); window.location.href='/admin/editor/${post.id}'">
                                         Edit
                                     </button>
                                     <button class="btn btn-sm btn-outline-danger" 
@@ -206,7 +211,7 @@
                     <td class="text-muted"><small>${textPreview}</small></td>
                     <td>
                         <button class="btn btn-sm btn-outline-secondary" 
-                            onclick="window.location.href='/src/route/admin/editor.html?id=${post.id}&source=${post.source}&path=${encodeURIComponent(post.path || '')}'">
+                            onclick="setPostContext('${post.id}', '${post.source}', '${post.path || ''}'); window.location.href='/admin/editor/${post.id}'">
                             Edit
                         </button>
                         <button class="btn btn-sm btn-outline-danger" 
@@ -260,7 +265,7 @@
                 }
             });
 
-            const eventStorePromise = fetch('/__api/aggregates?type=page')
+            const eventStorePromise = fetch('/__api/aggregates?type=page&t=' + Date.now(), { cache: 'no-store' })
                 .then(res => {
                     if (!res.ok) throw new Error('API failed');
                     return res.json();
@@ -298,7 +303,7 @@
         } catch (error) {
             console.error('Error loading posts:', error);
             // Only show error if list is empty (don't wipe cache on transient error)
-            if (postsList.children.length <= 1) {
+            if (postsList && postsList.children.length <= 1) {
                 postsList.innerHTML = `
                     <tr>
                         <td colspan="4" class="text-center text-danger py-4">
@@ -313,11 +318,15 @@
     // Load initial fresh data
     loadPosts().catch(err => console.error('[Admin] loadPosts failed:', err));
 
+    // SPA ROBUSTNESS: Cleanup previous subscription if it exists
+    if (window.postsSubscription) {
+        try { window.postsSubscription.unsubscribe(); } catch (e) { }
+    }
+
     // Realtime Subscription
-    let subscription = null;
     try {
         console.log('[Admin] Subscribing to realtime updates...');
-        subscription = postsService.subscribe((payload) => {
+        window.postsSubscription = postsService.subscribe((payload) => {
             console.log('[Admin] Realtime update received:', payload);
             loadPosts();
         });

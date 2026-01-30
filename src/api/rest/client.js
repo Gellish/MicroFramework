@@ -3,7 +3,7 @@
  * centralized request handling with support for base URL and default headers.
  */
 
-const API_BASE_URL = 'https://jsonplaceholder.typicode.com'; // Placeholder, replace with actual API URL
+const API_BASE_URL = ''; // Use relative paths for local dev and Vite middleware
 
 class ApiClient {
     constructor(baseURL = API_BASE_URL) {

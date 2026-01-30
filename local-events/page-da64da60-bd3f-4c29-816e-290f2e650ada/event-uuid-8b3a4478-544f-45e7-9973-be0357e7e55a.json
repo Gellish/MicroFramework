@@ -1,0 +1,12 @@
+{
+  "eventId": "8b3a4478-544f-45e7-9973-be0357e7e55a",
+  "aggregateId": "da64da60-bd3f-4c29-816e-290f2e650ada",
+  "aggregateType": "page",
+  "eventType": "PAGE_CREATED",
+  "payload": {
+    "title": "test Local event1",
+    "content": "test Local event1..."
+  },
+  "version": 1,
+  "timestamp": "2026-01-30T03:34:36.849Z"
+}

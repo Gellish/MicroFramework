@@ -1,0 +1,232 @@
+<title>User Editor</title>
+
+<div id="toast-container"></div>
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3" id="editorTitle">New User</h1>
+                <button class="btn btn-outline-secondary" onclick="window.location.href='/admin/users'">
+                    <i class="bi bi-arrow-left"></i> Back to Users
+                </button>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form id="userForm">
+                        <div class="mb-3">
+                            <label for="userName" class="form-label">Full Name</label>
+                            <input type="text" class="form-control" id="userName" placeholder="John Doe" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="userEmail" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="userEmail" placeholder="john@example.com"
+                                required>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="userRole" class="form-label">Role</label>
+                                <select class="form-select" id="userRole">
+                                    <option value="user">User</option>
+                                    <option value="moderator">Moderator</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="userStatus" class="form-label">Status</label>
+                                <select class="form-select" id="userStatus">
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                    <option value="pending">Pending</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg" id="saveBtn">Create User</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="mt-4" id="eventLogSection" style="display: none;">
+                <h5 class="text-muted">Event History</h5>
+                <div class="list-group list-group-flush shadow-sm rounded" id="eventLog">
+                    <!-- Events will be listed here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Toast Styles (Re-used for consistency) */
+    #toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+    }
+
+    .toast-box {
+        min-width: 250px;
+        background: #28a745;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        animation: slideIn 0.3s ease-out forwards;
+        font-weight: 500;
+        border-left: 5px solid #1e7e34;
+    }
+
+    .toast-box.error {
+        background: #dc3545;
+        border-left-color: #bd2130;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(120%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+        }
+
+        to {
+            opacity: 0;
+        }
+    }
+</style>
+
+<script type="module">
+    import { projectState, userReducer } from '/src/lib/cqrs/projection.js';
+    import { uuidv4 } from '/src/lib/cqrs/uuid.js';
+
+    const urlParams = new URLSearchParams(window.location.search);
+
+    // RESTful ID extraction: /admin/user-editor/UUID -> split('/') = ['', 'admin', 'user-editor', 'UUID']
+    const pathParts = window.location.pathname.split('/');
+    const pathId = pathParts.length === 4 ? pathParts[3] : null;
+
+    const userId = urlParams.get('id') || pathId;
+    const form = document.getElementById('userForm');
+    const saveBtn = document.getElementById('saveBtn');
+    const editorTitle = document.getElementById('editorTitle');
+
+    let currentVersion = 0;
+    const AGGREGATE_TYPE = 'user';
+
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast-box ${type}`;
+        toast.innerHTML = `<span>${message}</span><button class="btn-close btn-close-white ms-3" style="font-size: 0.7rem;"></button>`;
+        container.appendChild(toast);
+        const timer = setTimeout(() => { toast.style.animation = 'fadeOut 0.5s forwards'; setTimeout(() => toast.remove(), 500); }, 3000);
+        toast.querySelector('.btn-close').addEventListener('click', () => { clearTimeout(timer); toast.remove(); });
+    }
+
+    async function loadUser() {
+        if (!userId) return;
+
+        editorTitle.textContent = 'Edit User';
+        saveBtn.textContent = 'Save Changes';
+        document.getElementById('eventLogSection').style.display = 'block';
+
+        try {
+            const response = await fetch(`/__api/events?type=${AGGREGATE_TYPE}&id=${userId}&t=` + Date.now(), { cache: 'no-store' });
+            if (!response.ok) throw new Error('Failed to load events');
+            const { events } = await response.json();
+
+            if (events && events.length > 0) {
+                const state = projectState(events, userReducer);
+                document.getElementById('userName').value = state.name || '';
+                document.getElementById('userEmail').value = state.email || '';
+                document.getElementById('userRole').value = state.role || 'user';
+                document.getElementById('userStatus').value = state.status || 'active';
+                currentVersion = state.version;
+
+                renderEventLog(events);
+            }
+        } catch (error) {
+            showToast('Error loading user: ' + error.message, 'error');
+        }
+    }
+
+    function renderEventLog(events) {
+        const log = document.getElementById('eventLog');
+        log.innerHTML = events.map(e => `
+            <div class="list-group-item bg-light border-0 mb-1 rounded small">
+                <div class="d-flex justify-content-between">
+                    <span class="fw-bold text-primary">${e.eventType}</span>
+                    <span class="text-muted">${new Date(e.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <div class="text-muted" style="font-size: 0.75rem;">Version: ${e.version}</div>
+            </div>
+        `).reverse().join('');
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        const name = document.getElementById('userName').value;
+        const email = document.getElementById('userEmail').value;
+        const role = document.getElementById('userRole').value;
+        const status = document.getElementById('userStatus').value;
+
+        const id = userId || uuidv4();
+        const eventType = userId ? 'USER_UPDATED' : 'USER_CREATED';
+        const version = currentVersion + 1;
+
+        const eventData = {
+            aggregateId: id,
+            aggregateType: AGGREGATE_TYPE,
+            eventType: eventType,
+            version: version,
+            payload: { name, email, role, status }
+        };
+
+        try {
+            const response = await fetch('/__api/events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(eventData)
+            });
+
+            if (!response.ok) throw new Error('Failed to save event');
+
+            showToast(userId ? 'User updated' : 'User created');
+
+            if (!userId) {
+                setTimeout(() => window.location.href = `/admin/user-editor?id=${id}`, 1000);
+            } else {
+                await loadUser();
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Changes';
+            }
+        } catch (error) {
+            showToast('Error saving: ' + error.message, 'error');
+            saveBtn.disabled = false;
+            saveBtn.textContent = userId ? 'Save Changes' : 'Create User';
+        }
+    });
+
+    loadUser();
+</script>

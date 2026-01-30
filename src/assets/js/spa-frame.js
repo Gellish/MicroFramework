@@ -17,7 +17,29 @@ function sameOrigin(url) {
 // Map clean URL to actual HTML file
 function resolveUrl(path) {
   if (path === "/") return "src/route/index.html";
-  return path.endsWith(".html") ? path : path.slice(1) + ".html";
+
+  // 1. Handle RESTful editor paths: /admin/editor/{uuid} -> src/route/admin/editor.html
+  if (path.startsWith("/admin/editor/") && path.split('/').length === 4) {
+    return "src/route/admin/editor.html";
+  }
+
+  // 2. Handle RESTful user-editor paths: /admin/user-editor/{uuid} -> src/route/admin/user-editor.html
+  if (path.startsWith("/admin/user-editor/") && path.split('/').length === 4) {
+    return "src/route/admin/user-editor.html";
+  }
+
+  // 3. If it already starts with src/route, just ensure .html
+  if (path.startsWith("/src/route/")) {
+    return path.endsWith(".html") ? path.slice(1) : path.slice(1) + ".html";
+  }
+
+  // 4. Map clean paths like /admin/posts to src/route/admin/posts.html
+  let cleanPath = path;
+  if (!cleanPath.endsWith(".html")) {
+    cleanPath += ".html";
+  }
+
+  return "src/route" + (cleanPath.startsWith("/") ? cleanPath : "/" + cleanPath);
 }
 
 // Main function to navigate to a new page via fetch
@@ -39,8 +61,14 @@ async function navigate(url, push = true) {
     const isCleanUrl = !url.includes('.') && url !== '/';
     let targetUrl = url;
 
-    // Attempt fetch
-    let res = await fetch(targetUrl, { credentials: "same-origin" });
+    // Attempt fetch with cache-busting to ensure we don't get a stale fragment
+    const fetchUrl = new URL(url, location.origin);
+    fetchUrl.searchParams.set('f_t', Date.now());
+
+    let res = await fetch(fetchUrl.toString(), {
+      credentials: "same-origin",
+      cache: "no-store"
+    });
 
     // If 404 or clean URL failed, check if it's a blog post slug
     if ((!res.ok || isCleanUrl) && IncludeParser && IncludeParser.getPostBySlug) {
@@ -96,6 +124,14 @@ async function navigate(url, push = true) {
     if (IncludeParser && typeof IncludeParser.run === "function") {
       await IncludeParser.run();
     }
+
+    // CLEANUP: Remove old page-specific scripts from head before adding new ones
+    // We identify them by looking for our "spa_t" cache-buster or "html-proxy"
+    document.querySelectorAll('head script').forEach(s => {
+      if (s.src && (s.src.includes('spa_t=') || s.src.includes('html-proxy'))) {
+        s.remove();
+      }
+    });
 
     // Re-run all scripts in the new body
     doc.body.querySelectorAll("script").forEach((s) => {

@@ -8,7 +8,7 @@ export const authService = {
      */
     async login(email, password) {
         // Note: This is an example endpoint. Adjust according to real backend.
-        const response = await apiClient.post('/auth/login', { email, password });
+        const response = await apiClient.post('/__api/auth/login', { email, password });
         if (response && response.token) {
             localStorage.setItem('auth_token', response.token);
             localStorage.setItem('user', JSON.stringify(response.user));

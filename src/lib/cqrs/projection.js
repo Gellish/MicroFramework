@@ -48,3 +48,35 @@ export function pageReducer(state, event) {
             return state;
     }
 }
+
+/**
+ * User Reducer
+ */
+export function userReducer(state, event) {
+    switch (event.eventType) {
+        case 'USER_CREATED':
+            return {
+                ...state,
+                id: event.aggregateId,
+                email: event.payload.email,
+                name: event.payload.name,
+                role: event.payload.role || 'user',
+                status: event.payload.status || 'active',
+                createdAt: event.timestamp,
+                updatedAt: event.timestamp,
+                version: event.version
+            };
+        case 'USER_UPDATED':
+            return {
+                ...state,
+                email: event.payload.email ?? state.email,
+                name: event.payload.name ?? state.name,
+                role: event.payload.role ?? state.role,
+                status: event.payload.status ?? state.status,
+                updatedAt: event.timestamp,
+                version: event.version
+            };
+        default:
+            return state;
+    }
+}

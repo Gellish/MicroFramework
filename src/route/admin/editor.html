@@ -197,9 +197,30 @@
     });
 
     const params = new URLSearchParams(window.location.search);
-    const postId = params.get('id');
-    const urlSource = params.get('source'); // 'database' or 'local'
-    const postPath = params.get('path'); // for local files
+
+    // RESTful ID extraction: /admin/editor/UUID -> split('/') = ['', 'admin', 'editor', 'UUID']
+    const pathParts = window.location.pathname.split('/');
+    const pathId = pathParts.length === 4 ? pathParts[3] : null;
+
+    const postId = params.get('id') || pathId;
+
+    // CONTEXT RECOVERY: Get source/path from session storage if not in URL
+    let postCtx = {};
+    try {
+        const stored = sessionStorage.getItem('post_ctx_' + postId);
+        if (stored) postCtx = JSON.parse(stored);
+    } catch (e) { }
+
+    const urlSource = params.get('source') || postCtx.source; // 'database' or 'local'
+    const postPath = params.get('path') || postCtx.path; // for local files
+
+    // URL CLEANUP: If source or path are in the URL, remove them to keep it clean
+    if (params.has('source') || params.has('path')) {
+        const cleanParams = new URLSearchParams();
+        if (postId) cleanParams.set('id', postId);
+        const newUrl = window.location.pathname + (cleanParams.toString() ? '?' + cleanParams.toString() : '');
+        window.history.replaceState({}, document.title, newUrl);
+    }
 
     const sourceSelector = document.getElementById('sourceSelector');
     const pathContainer = document.getElementById('pathContainer');

@@ -2,7 +2,7 @@ import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import fs from 'fs'
 import { writeEvent, readEvents, getAllAggregates, deleteAggregate } from './src/lib/cqrs/event-store.js'
-import { projectState, pageReducer } from './src/lib/cqrs/projection.js'
+import { projectState, pageReducer, userReducer } from './src/lib/cqrs/projection.js'
 
 // Helper to recursively process @include directives
 function processIncludes(html) {
@@ -44,6 +44,35 @@ export default defineConfig({
                 const env = loadEnv('development', process.cwd(), '');
                 const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
                 const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
+
+                // Clean URL Rewrite Middleware (Handles refresh/direct navigation for /admin/xxx)
+                server.middlewares.use((req, res, next) => {
+                    const url = new URL(req.url, `http://${req.headers.host}`);
+                    const path = url.pathname;
+
+                    // 1. Handle RESTful paths: /admin/editor/{uuid} -> /src/route/admin/editor.html
+                    const editorMatch = path.match(/^\/admin\/editor\/([a-f0-9-]+)$/i);
+                    if (editorMatch) {
+                        const newPath = '/src/route/admin/editor.html';
+                        req.url = newPath + url.search;
+                        return next();
+                    }
+
+                    // 2. Handle RESTful paths: /admin/user-editor/{uuid} -> /src/route/admin/user-editor.html
+                    const userEditorMatch = path.match(/^\/admin\/user-editor\/([a-f0-9-]+)$/i);
+                    if (userEditorMatch) {
+                        const newPath = '/src/route/admin/user-editor.html';
+                        req.url = newPath + url.search;
+                        return next();
+                    }
+
+                    // 3. Handle Clean simple paths: /admin/posts -> /src/route/admin/posts.html
+                    if (path.startsWith('/admin') && !path.includes('.') && path !== '/admin' && path !== '/admin/') {
+                        const newPath = `/src/route${path}.html`;
+                        req.url = newPath + url.search;
+                    }
+                    next();
+                });
 
                 // Admin User Creation API
                 server.middlewares.use('/__api/admin/create-user', async (req, res, next) => {
@@ -194,6 +223,48 @@ export default defineConfig({
                 });
 
                 // CQRS Events API
+                server.middlewares.use('/__api', (req, res, next) => {
+                    const url = new URL(req.url, `http://${req.headers.host}`);
+                    const path = url.pathname;
+
+                    // AUTH: POST /__api/auth/login
+                    if (req.method === 'POST' && path === '/auth/login') {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk; });
+                        req.on('end', () => {
+                            try {
+                                const { email, password } = JSON.parse(body);
+                                const adminEmail = process.env.ADMIN_EMAIL || 'admin@email.com';
+                                const adminPassword = process.env.ADMIN_PASSWORD || 'test1234';
+
+                                if (email === adminEmail && password === adminPassword) {
+                                    res.statusCode = 200;
+                                    res.setHeader('Content-Type', 'application/json');
+                                    res.end(JSON.stringify({
+                                        token: 'mock-jwt-token-' + Date.now(),
+                                        user: {
+                                            email: adminEmail,
+                                            name: 'Initial Admin',
+                                            role: 'admin'
+                                        }
+                                    }));
+                                } else {
+                                    res.statusCode = 401;
+                                    res.setHeader('Content-Type', 'application/json');
+                                    res.end(JSON.stringify({ message: 'Invalid credentials' }));
+                                }
+                            } catch (e) {
+                                res.statusCode = 400;
+                                res.end(JSON.stringify({ message: 'Invalid request body' }));
+                            }
+                        });
+                        return;
+                    }
+
+                    // Forward to more specific handlers or continue
+                    next();
+                });
+
                 server.middlewares.use('/__api/events', (req, res, next) => {
                     const url = new URL(req.url, `http://${req.headers.host}`);
                     const path = url.pathname;
@@ -282,7 +353,8 @@ export default defineConfig({
 
                             const results = await Promise.all(filtered.map(async (a) => {
                                 const events = await readEvents(a.type, a.id);
-                                const state = projectState(events, pageReducer);
+                                const reducer = a.type === 'user' ? userReducer : pageReducer;
+                                const state = projectState(events, reducer);
                                 return {
                                     id: a.id,
                                     type: a.type,
