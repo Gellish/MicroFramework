@@ -1,0 +1,12 @@
+{
+  "eventId": "ee50fc74-1abe-4529-924e-482f965d3409",
+  "aggregateId": "8b5a7bc5-f7b3-41fa-9c66-9b4103e7c552",
+  "aggregateType": "page",
+  "eventType": "PAGE_UPDATED",
+  "payload": {
+    "title": "",
+    "content": "Local..."
+  },
+  "version": 1,
+  "timestamp": "2026-01-30T04:20:45.335Z"
+}

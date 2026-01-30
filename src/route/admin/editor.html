@@ -12,48 +12,51 @@
         min-height: 400px;
     }
 
-    /* Toast Styles */
+    /* Toast Styles - Centered */
     #toast-container {
         position: fixed;
         top: 20px;
-        right: 20px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
 
     .toast-box {
-        min-width: 250px;
+        min-width: 300px;
         background: #28a745;
         color: white;
-        padding: 15px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        padding: 12px 20px;
+        border-radius: 50px;
+        /* Pill shape */
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
         margin-bottom: 10px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        animation: slideIn 0.3s ease-out forwards;
+        animation: slideDown 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
         font-weight: 500;
-        border-left: 5px solid #1e7e34;
+        border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .toast-box.error {
         background: #dc3545;
-        border-left-color: #bd2130;
     }
 
     .toast-box.info {
         background: #17a2b8;
-        border-left-color: #117a8b;
     }
 
-    @keyframes slideIn {
+    @keyframes slideDown {
         from {
-            transform: translateX(120%);
+            transform: translateY(-100%);
             opacity: 0;
         }
 
         to {
-            transform: translateX(0);
+            transform: translateY(0);
             opacity: 1;
         }
     }
@@ -61,10 +64,12 @@
     @keyframes fadeOut {
         from {
             opacity: 1;
+            transform: scale(1);
         }
 
         to {
             opacity: 0;
+            transform: scale(0.9);
         }
     }
 </style>
@@ -408,7 +413,7 @@
                 aggregateId,
                 aggregateType: 'page',
                 eventType: postId || postPath ? 'PAGE_UPDATED' : 'PAGE_CREATED',
-                payload: { title, content: bodyContent.substring(0, 100) + '...' }, // Minimal payload for log demo
+                payload: { title, content: bodyContent },
                 version: (parseInt(replayedStateContent.textContent.version) || 0) + 1
             };
 
