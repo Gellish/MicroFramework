@@ -1,0 +1,11 @@
+{
+  "eventId": "3b360978-6312-48c3-94c6-2f2243295eec",
+  "aggregateId": "eb73eb18-d9bc-4a74-9a02-1898d2e6ba4f",
+  "aggregateType": "page",
+  "eventType": "PAGE_UPDATED",
+  "payload": {
+    "title": "Updated Title"
+  },
+  "version": 2,
+  "timestamp": "2026-01-30T03:05:30.116Z"
+}

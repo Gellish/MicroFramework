@@ -1,0 +1,12 @@
+{
+  "eventId": "43dcad16-f951-427b-a562-02c9401c82ab",
+  "aggregateId": "a063bc4f-95e0-47c3-831a-3204159e9c70",
+  "aggregateType": "page",
+  "eventType": "PAGE_CREATED",
+  "payload": {
+    "title": "Initial Title",
+    "content": "Hello World"
+  },
+  "version": 1,
+  "timestamp": "2026-01-30T02:53:18.568Z"
+}

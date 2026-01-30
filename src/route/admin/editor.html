@@ -11,7 +11,65 @@
         border-radius: 0 0 4px 4px;
         min-height: 400px;
     }
+
+    /* Toast Styles */
+    #toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+    }
+
+    .toast-box {
+        min-width: 250px;
+        background: #28a745;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        animation: slideIn 0.3s ease-out forwards;
+        font-weight: 500;
+        border-left: 5px solid #1e7e34;
+    }
+
+    .toast-box.error {
+        background: #dc3545;
+        border-left-color: #bd2130;
+    }
+
+    .toast-box.info {
+        background: #17a2b8;
+        border-left-color: #117a8b;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(120%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+        }
+
+        to {
+            opacity: 0;
+        }
+    }
 </style>
+
+<div id="toast-container"></div>
 
 <div class="container-fluid">
     <div class="row mb-3">
@@ -37,6 +95,7 @@
                     <select class="form-select" id="sourceSelector">
                         <option value="database">Database (Supabase)</option>
                         <option value="local">Offline File (Markdown)</option>
+                        <option value="event-store">Event Store (Local-first)</option>
                     </select>
                 </div>
                 <div class="col-md-6" id="pathContainer" style="display:none;">
@@ -70,7 +129,31 @@
                     </div>
                 </div>
             </div>
+
             <textarea id="markdownEditor"></textarea>
+
+            <!-- CQRS Event Log Section -->
+            <div class="card mt-4 mb-5 border-info">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Local-first Event Log (Phase 1)</h5>
+                    <button class="btn btn-sm btn-light" id="refreshEventsBtn">Refresh</button>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Aggregate ID (UUIDv4):</label>
+                        <code id="displayAggregateId" class="ms-2">loading...</code>
+                    </div>
+                    <div id="eventLogContainer" style="max-height: 300px; overflow-y: auto;"
+                        class="bg-dark p-3 rounded">
+                        <pre class="text-success m-0" id="eventLogContent">No events yet.</pre>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label fw-bold">Replayed State (Current):</label>
+                        <pre id="replayedStateContent" class="bg-light p-2 border rounded"
+                            style="font-size: 0.85rem;">{}</pre>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -82,10 +165,18 @@
     import { postsService } from '/src/api/index.js';
     import { IncludeParser } from '/src/assets/js/parser.js';
     import jsyaml from 'js-yaml'; // Vite resolves this from node_modules
+    import { uuidv4 } from '/src/lib/cqrs/uuid.js';
+    import { projectState, pageReducer } from '/src/lib/cqrs/projection.js';
 
     const saveBtn = document.getElementById('saveBtn');
     const titleInput = document.getElementById('postTitleInput');
     const editorTitle = document.getElementById('editorTitle');
+
+    // CQRS Elements
+    const displayAggregateId = document.getElementById('displayAggregateId');
+    const eventLogContent = document.getElementById('eventLogContent');
+    const replayedStateContent = document.getElementById('replayedStateContent');
+    const refreshEventsBtn = document.getElementById('refreshEventsBtn');
 
     // Metadata Inputs
     const metaDiv = document.getElementById('metadataFields');
@@ -114,12 +205,39 @@
     const pathContainer = document.getElementById('pathContainer');
     const pathInput = document.getElementById('pathInput');
 
+    // Toast Function
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast-box ${type}`;
+        toast.innerHTML = `
+            <span>${message}</span>
+            <button class="btn-close btn-close-white ms-3" style="font-size: 0.7rem;"></button>
+        `;
+
+        container.appendChild(toast);
+
+        // Auto remove
+        const timer = setTimeout(() => {
+            toast.style.animation = 'fadeOut 0.5s forwards';
+            setTimeout(() => toast.remove(), 500);
+        }, 3000);
+
+        toast.querySelector('.btn-close').addEventListener('click', () => {
+            clearTimeout(timer);
+            toast.remove();
+        });
+    }
+
     // UI Logic: Handle Source Selection
     function updateUIForSource() {
         const mode = sourceSelector.value;
         if (mode === 'local') {
             pathContainer.style.display = 'block';
             metaDiv.style.display = 'block';
+        } else if (mode === 'event-store') {
+            pathContainer.style.display = 'none';
+            metaDiv.style.display = 'none';
         } else {
             pathContainer.style.display = 'none';
             metaDiv.style.display = 'none';
@@ -128,9 +246,50 @@
     sourceSelector.addEventListener('change', updateUIForSource);
 
     let currentPost = null;
+    let aggregateId = null;
+
+    async function fetchAndRenderEvents() {
+        if (!aggregateId) return;
+
+        try {
+            const response = await fetch(`/__api/events?type=page&id=${aggregateId}`);
+            const data = await response.json();
+
+            if (data.events && data.events.length > 0) {
+                eventLogContent.textContent = data.events.map(e => `[${e.timestamp}] ${e.eventType}: ${JSON.stringify(e.payload)}`).join('\n');
+
+                // Replay state
+                const state = projectState(data.events, pageReducer);
+                replayedStateContent.textContent = JSON.stringify(state, null, 2);
+
+                // If in event-store mode and no ID/Path, populate editor from replayed state
+                if (sourceSelector.value === 'event-store') {
+                    titleInput.value = state.title || '';
+                    easyMDE.value(state.content || '');
+                }
+            } else {
+                eventLogContent.textContent = "No events found.";
+                replayedStateContent.textContent = "{}";
+            }
+        } catch (err) {
+            console.error('Error fetching events:', err);
+            eventLogContent.textContent = "Error loading events.";
+        }
+    }
+
+    refreshEventsBtn.addEventListener('click', fetchAndRenderEvents);
 
     async function loadPost() {
-        if (!postId && !postPath) {
+        // Load or Generate Aggregate ID
+        const storedAggregateId = localStorage.getItem(`aggregate_id_${postId || postPath || 'new'}`);
+        aggregateId = storedAggregateId || uuidv4();
+        localStorage.setItem(`aggregate_id_${postId || postPath || 'new'}`, aggregateId);
+        displayAggregateId.textContent = aggregateId;
+
+        // Fetch existing events
+        await fetchAndRenderEvents();
+
+        if (!postId && !postPath && urlSource !== 'event-store') {
             editorTitle.textContent = "New Post";
             // New Post Mode: Enable selector
             sourceSelector.disabled = false;
@@ -141,6 +300,9 @@
 
         // Edit Mode: Lock selector to the current source
         sourceSelector.value = urlSource || 'database';
+        if (urlSource === 'event-store') {
+            editorTitle.textContent = "Edit from Event Store";
+        }
         sourceSelector.disabled = true;
         updateUIForSource();
 
@@ -220,14 +382,29 @@
         const mode = sourceSelector.value;
 
         try {
+            // DISPATCH CQRS EVENT (Phase 1)
+            const eventPayload = {
+                aggregateId,
+                aggregateType: 'page',
+                eventType: postId || postPath ? 'PAGE_UPDATED' : 'PAGE_CREATED',
+                payload: { title, content: bodyContent.substring(0, 100) + '...' }, // Minimal payload for log demo
+                version: (parseInt(replayedStateContent.textContent.version) || 0) + 1
+            };
+
+            await fetch('/__api/events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(eventPayload)
+            });
+
             if (mode === 'database') {
                 if (postId) {
                     await postsService.update(postId, { title, content: bodyContent });
                 } else {
                     await postsService.create({ title, content: bodyContent });
                 }
-                alert('Saved to Database!');
-                if (!postId) window.location.href = '/admin/posts';
+                showToast('Saved to Database + Local CQRS Event Written!');
+                if (!postId) setTimeout(() => window.location.href = '/admin/posts', 1500);
             } else if (mode === 'local') {
                 // Determine Path
                 let targetPath = pathInput.value;
@@ -267,12 +444,17 @@
                 });
 
                 if (!response.ok) throw new Error('Local save failed: ' + response.statusText);
-                alert('Saved to Local File System: ' + targetPath);
-                if (!postId) window.location.href = '/admin/posts';
+                showToast('Saved to Local File System + Local CQRS Event Written!');
+                if (!postId) setTimeout(() => window.location.href = '/admin/posts', 1500);
+            } else if (mode === 'event-store') {
+                showToast('Event Appended Successfully! State rebuilt.');
             }
+
+            fetchAndRenderEvents();
+
         } catch (err) {
             console.error('Save error:', err);
-            alert('Error saving: ' + err.message);
+            showToast('Error saving: ' + err.message, 'error');
         } finally {
             saveBtn.disabled = false;
             saveBtn.textContent = 'Save Changes';

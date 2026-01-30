@@ -1,6 +1,8 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import fs from 'fs'
+import { writeEvent, readEvents, getAllAggregates, deleteAggregate } from './src/lib/cqrs/event-store.js'
+import { projectState, pageReducer } from './src/lib/cqrs/projection.js'
 
 // Helper to recursively process @include directives
 function processIncludes(html) {
@@ -186,6 +188,117 @@ export default defineConfig({
                                 res.end(JSON.stringify({ error: err.message }));
                             }
                         });
+                        return;
+                    }
+                    next();
+                });
+
+                // CQRS Events API
+                server.middlewares.use('/__api/events', (req, res, next) => {
+                    const url = new URL(req.url, `http://${req.headers.host}`);
+                    const path = url.pathname;
+
+                    // POST /__api/events/delete
+                    if (req.method === 'POST' && path === '/delete') {
+                        let body = '';
+                        req.on('data', chunk => body += chunk);
+                        req.on('end', async () => {
+                            try {
+                                const { type, id } = JSON.parse(body);
+                                if (!type || !id) throw new Error('Missing type or id');
+                                await deleteAggregate(type, id);
+                                res.statusCode = 200;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(JSON.stringify({ success: true }));
+                            } catch (err) {
+                                console.error('[Vite API] Delete Aggregate Error:', err);
+                                res.statusCode = 500;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(JSON.stringify({ error: err.message }));
+                            }
+                        });
+                        return;
+                    }
+
+                    // GET /__api/events?type=page&id=123 (Base path)
+                    if (req.method === 'GET' && (path === '/' || path === '')) {
+                        const type = url.searchParams.get('type');
+                        const id = url.searchParams.get('id');
+
+                        if (!type || !id) {
+                            res.statusCode = 400;
+                            res.end(JSON.stringify({ error: 'Missing type or id' }));
+                            return;
+                        }
+
+                        readEvents(type, id)
+                            .then(events => {
+                                res.statusCode = 200;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(JSON.stringify({ events }));
+                            })
+                            .catch(err => {
+                                console.error('[Vite API] Read Events Error:', err);
+                                res.statusCode = 500;
+                                res.end(JSON.stringify({ error: err.message }));
+                            });
+                        return;
+                    }
+
+                    // POST /__api/events (Base path)
+                    if (req.method === 'POST' && (path === '/' || path === '')) {
+                        let body = '';
+                        req.on('data', chunk => { body += chunk.toString(); });
+                        req.on('end', async () => {
+                            try {
+                                const eventData = JSON.parse(body);
+                                const event = await writeEvent(eventData);
+                                res.statusCode = 200;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(JSON.stringify({ success: true, event }));
+                            } catch (err) {
+                                console.error('[Vite API] Write Event Error:', err);
+                                res.statusCode = 500;
+                                res.end(JSON.stringify({ error: err.message }));
+                            }
+                        });
+                        return;
+                    }
+                    next();
+                });
+
+                // CQRS Aggregates API
+                server.middlewares.use('/__api/aggregates', async (req, res, next) => {
+                    if (req.method === 'GET') {
+                        const url = new URL(req.url, `http://${req.headers.host}`);
+                        const typeFilter = url.searchParams.get('type');
+
+                        try {
+                            const aggregates = await getAllAggregates();
+
+                            const filtered = typeFilter
+                                ? aggregates.filter(a => a.type === typeFilter)
+                                : aggregates;
+
+                            const results = await Promise.all(filtered.map(async (a) => {
+                                const events = await readEvents(a.type, a.id);
+                                const state = projectState(events, pageReducer);
+                                return {
+                                    id: a.id,
+                                    type: a.type,
+                                    state: state,
+                                    eventsCount: events.length
+                                };
+                            }));
+
+                            res.statusCode = 200;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ aggregates: results }));
+                        } catch (err) {
+                            console.error('List Aggregates Error:', err);
+                            res.statusCode = 500;
+                            res.end(JSON.stringify({ error: err.message }));
+                        }
                         return;
                     }
                     next();

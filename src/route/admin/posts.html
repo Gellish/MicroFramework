@@ -70,9 +70,11 @@
 
                         const sourceBadge = post.source === 'local'
                             ? '<span class="badge bg-secondary">Offline Content</span>'
-                            : '<span class="badge bg-primary">Database</span>';
+                            : post.source === 'event-store'
+                                ? '<span class="badge bg-info">Event Store</span>'
+                                : '<span class="badge bg-primary">Database</span>';
 
-                        const isLocal = post.source === 'local';
+                        const isLocal = post.source === 'local' || post.source === 'event-store';
 
                         return `
                             <tr>
@@ -109,12 +111,16 @@
 
     const postsList = document.getElementById('postsList');
     let postToDeleteId = null;
+    let postToDeleteSource = null;
+    let postToDeletePath = null;
     let deleteModal = null;
 
     // Initialize modal on load
 
-    window.openDeleteModal = (id) => {
+    window.openDeleteModal = (id, source, path) => {
         postToDeleteId = id;
+        postToDeleteSource = source;
+        postToDeletePath = decodeURIComponent(path || '');
         if (!deleteModal) {
             deleteModal = new Modal(document.getElementById('deleteModal'));
         }
@@ -129,7 +135,24 @@
         btn.textContent = 'Deleting...';
 
         try {
-            await postsService.delete(postToDeleteId);
+            if (postToDeleteSource === 'database') {
+                await postsService.delete(postToDeleteId);
+            } else if (postToDeleteSource === 'local') {
+                const response = await fetch('/__api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: postToDeletePath })
+                });
+                if (!response.ok) throw new Error('Local file deletion failed');
+            } else if (postToDeleteSource === 'event-store') {
+                const response = await fetch('/__api/events/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'page', id: postToDeleteId })
+                });
+                if (!response.ok) throw new Error('Event store deletion failed');
+            }
+
             deleteModal.hide();
             await loadPosts(); // Refresh list
         } catch (error) {
@@ -139,6 +162,8 @@
             btn.disabled = false;
             btn.textContent = 'Delete';
             postToDeleteId = null;
+            postToDeleteSource = null;
+            postToDeletePath = null;
         }
     });
 
@@ -164,16 +189,19 @@
 
             const sourceBadge = post.source === 'local'
                 ? '<span class="badge bg-secondary">Offline Content</span>'
-                : '<span class="badge bg-primary">Database</span>';
+                : post.source === 'event-store'
+                    ? '<span class="badge bg-info">Event Store</span>'
+                    : '<span class="badge bg-primary">Database</span>';
 
-            const isLocal = post.source === 'local';
+            const isLocal = post.source === 'local' || post.source === 'event-store';
 
             return `
                 <tr>
                     <td>${sourceBadge}</td>
                     <td class="fw-bold">
                         ${post.title || 'Untitled'}
-                        ${isLocal ? `<br><small class="text-muted">${post.path}</small>` : ''}
+                        ${isLocal && post.path ? `<br><small class="text-muted">${post.path}</small>` : ''}
+                        ${post.source === 'event-store' ? `<br><small class="text-muted">ID: ${post.id.substring(0, 8)}...</small>` : ''}
                     </td>
                     <td class="text-muted"><small>${textPreview}</small></td>
                     <td>
@@ -232,11 +260,34 @@
                 }
             });
 
-            // Wait for both
-            const [dbData, localData] = await Promise.all([dbPromise, localPromise]);
+            const eventStorePromise = fetch('/__api/aggregates?type=page')
+                .then(res => {
+                    if (!res.ok) throw new Error('API failed');
+                    return res.json();
+                })
+                .then(data => {
+                    return (data.aggregates || []).map(a => ({
+                        id: a.id,
+                        title: a.state.title,
+                        content: a.state.content,
+                        source: 'event-store',
+                        path: '' // No path for event store items
+                    }));
+                })
+                .catch(err => {
+                    console.error('Event Store fetch error:', err);
+                    return [];
+                });
+
+            // Wait for all
+            const [dbData, localData, eventStoreData] = await Promise.all([
+                dbPromise,
+                localPromise,
+                eventStorePromise
+            ]);
 
             const dbPosts = dbData.map(p => ({ ...p, source: 'database' }));
-            const allPosts = [...dbPosts, ...localData];
+            const allPosts = [...dbPosts, ...localData, ...eventStoreData];
 
             // Update UI
             renderPosts(allPosts);
